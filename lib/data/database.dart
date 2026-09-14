@@ -6,10 +6,16 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+// database.g.dart is a *part* of this library, so it can only see the imports
+// declared here — not the ones tables.dart makes. Every domain type used in a
+// column (Day, and the enums behind textEnum) must therefore be imported here
+// too, or the app fails to compile while `flutter analyze` stays clean.
 import '../domain/day.dart';
+import '../domain/energy.dart';
 import 'daos/ai_calls_dao.dart';
 import 'daos/foods_dao.dart';
 import 'daos/journal_dao.dart';
+import 'daos/profile_dao.dart';
 import 'daos/tracking_dao.dart';
 import 'daos/weeks_dao.dart';
 import 'tables.dart';
@@ -33,7 +39,7 @@ part 'database.g.dart';
     AiCalls,
     Achievements,
   ],
-  daos: [FoodsDao, JournalDao, TrackingDao, WeeksDao, AiCallsDao],
+  daos: [ProfileDao, FoodsDao, JournalDao, TrackingDao, WeeksDao, AiCallsDao],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_open());

@@ -54,6 +54,15 @@ is wrong, however convenient.
 - **One task per commit, and push each one separately.** Never batch tasks.
   Task list lives in the vault (`90-Progress-Log.md`) and the plan file.
 - Before every commit: `flutter analyze` clean **and** `flutter test` green.
+  **The analyzer is not sufficient on its own.** It has twice passed on code
+  that could not compile: `database.g.dart` is a *part* of `database.dart`, so
+  it sees only that file's imports, not the ones `tables.dart` makes. Any domain
+  type used in a column — `Day`, and every enum behind `textEnum` — must be
+  imported in `database.dart` as well. Only the compiler catches it, so run the
+  tests.
+- Any task that adds a plugin also runs `flutter build apk --debug`. A plugin
+  that resolves in pub can still fail to build on Android (this is how the
+  `permission_handler` problem surfaced).
 - After every task: append an entry to the Obsidian vault progress log
   (see §6) in the same commit as the code.
 - Commit messages: `T<n>: <imperative summary>`, then a short body explaining

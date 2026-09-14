@@ -42,9 +42,19 @@ class StatBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(label.toUpperCase(), style: Type.label()),
+            Flexible(
+              child: Text(
+                label.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Type.label(),
+              ),
+            ),
+            const SizedBox(width: Space.sm),
             Text(
               valueLabel ?? '${value.round()} / ${max.round()}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: Type.label(color: color),
             ),
           ],

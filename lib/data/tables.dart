@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../domain/day.dart';
+import '../domain/energy.dart';
 
 /// Stores a [Day] as its `yyyymmdd` integer. See [Day] for why days are not
 /// `DateTime`.
@@ -46,13 +47,15 @@ enum AiPurpose { parseText, estimatePortion, parsePhoto, weeklyNarrative }
 class Profiles extends Table {
   IntColumn get id => integer().autoIncrement()();
 
-  /// Free text; only used to pick a BMR formula coefficient.
-  TextColumn get sex => text().withLength(min: 1, max: 16)();
+  /// Only used to pick a Mifflin-St Jeor constant. See [Sex].
+  TextColumn get sex => textEnum<Sex>()();
   IntColumn get birthYear => integer()();
   RealColumn get heightCm => real()();
 
-  /// Mifflin-St Jeor activity multiplier, e.g. 1.375 for lightly active.
-  RealColumn get activityMultiplier => real().withDefault(const Constant(1.375))();
+  /// Fallback for days with no step data; measured movement wins when present.
+  TextColumn get activityLevel => textEnum<ActivityLevel>()();
+
+  TextColumn get goal => textEnum<Goal>()();
 
   /// Target weight in kg. Null means "no target, just report".
   RealColumn get targetWeightKg => real().nullable()();
@@ -61,7 +64,7 @@ class Profiles extends Table {
   /// Monday is 1, Sunday is 7.
   IntColumn get weekEndsOn => integer().withDefault(const Constant(DateTime.sunday))();
 
-  /// Used to turn steps into distance when Health Connect reports only steps.
+  /// Used to turn steps into distance. Seeded from height, then editable.
   RealColumn get strideCm => real().withDefault(const Constant(72))();
 
   IntColumn get dailyStepGoal => integer().withDefault(const Constant(10000))();

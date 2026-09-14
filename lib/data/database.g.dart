@@ -21,19 +21,15 @@ class $ProfilesTable extends Profiles with TableInfo<$ProfilesTable, Profile> {
       'PRIMARY KEY AUTOINCREMENT',
     ),
   );
-  static const VerificationMeta _sexMeta = const VerificationMeta('sex');
   @override
-  late final GeneratedColumn<String> sex = GeneratedColumn<String>(
-    'sex',
-    aliasedName,
-    false,
-    additionalChecks: GeneratedColumn.checkTextLength(
-      minTextLength: 1,
-      maxTextLength: 16,
-    ),
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
+  late final GeneratedColumnWithTypeConverter<Sex, String> sex =
+      GeneratedColumn<String>(
+        'sex',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<Sex>($ProfilesTable.$convertersex);
   static const VerificationMeta _birthYearMeta = const VerificationMeta(
     'birthYear',
   );
@@ -56,18 +52,24 @@ class $ProfilesTable extends Profiles with TableInfo<$ProfilesTable, Profile> {
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _activityMultiplierMeta =
-      const VerificationMeta('activityMultiplier');
   @override
-  late final GeneratedColumn<double> activityMultiplier =
-      GeneratedColumn<double>(
-        'activity_multiplier',
+  late final GeneratedColumnWithTypeConverter<ActivityLevel, String>
+  activityLevel = GeneratedColumn<String>(
+    'activity_level',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  ).withConverter<ActivityLevel>($ProfilesTable.$converteractivityLevel);
+  @override
+  late final GeneratedColumnWithTypeConverter<Goal, String> goal =
+      GeneratedColumn<String>(
+        'goal',
         aliasedName,
         false,
-        type: DriftSqlType.double,
-        requiredDuringInsert: false,
-        defaultValue: const Constant(1.375),
-      );
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<Goal>($ProfilesTable.$convertergoal);
   static const VerificationMeta _targetWeightKgMeta = const VerificationMeta(
     'targetWeightKg',
   );
@@ -143,7 +145,8 @@ class $ProfilesTable extends Profiles with TableInfo<$ProfilesTable, Profile> {
     sex,
     birthYear,
     heightCm,
-    activityMultiplier,
+    activityLevel,
+    goal,
     targetWeightKg,
     weekEndsOn,
     strideCm,
@@ -166,14 +169,6 @@ class $ProfilesTable extends Profiles with TableInfo<$ProfilesTable, Profile> {
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
     }
-    if (data.containsKey('sex')) {
-      context.handle(
-        _sexMeta,
-        sex.isAcceptableOrUnknown(data['sex']!, _sexMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_sexMeta);
-    }
     if (data.containsKey('birth_year')) {
       context.handle(
         _birthYearMeta,
@@ -189,15 +184,6 @@ class $ProfilesTable extends Profiles with TableInfo<$ProfilesTable, Profile> {
       );
     } else if (isInserting) {
       context.missing(_heightCmMeta);
-    }
-    if (data.containsKey('activity_multiplier')) {
-      context.handle(
-        _activityMultiplierMeta,
-        activityMultiplier.isAcceptableOrUnknown(
-          data['activity_multiplier']!,
-          _activityMultiplierMeta,
-        ),
-      );
     }
     if (data.containsKey('target_weight_kg')) {
       context.handle(
@@ -261,10 +247,12 @@ class $ProfilesTable extends Profiles with TableInfo<$ProfilesTable, Profile> {
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
-      sex: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}sex'],
-      )!,
+      sex: $ProfilesTable.$convertersex.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}sex'],
+        )!,
+      ),
       birthYear: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}birth_year'],
@@ -273,10 +261,18 @@ class $ProfilesTable extends Profiles with TableInfo<$ProfilesTable, Profile> {
         DriftSqlType.double,
         data['${effectivePrefix}height_cm'],
       )!,
-      activityMultiplier: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}activity_multiplier'],
-      )!,
+      activityLevel: $ProfilesTable.$converteractivityLevel.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}activity_level'],
+        )!,
+      ),
+      goal: $ProfilesTable.$convertergoal.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}goal'],
+        )!,
+      ),
       targetWeightKg: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}target_weight_kg'],
@@ -308,18 +304,28 @@ class $ProfilesTable extends Profiles with TableInfo<$ProfilesTable, Profile> {
   $ProfilesTable createAlias(String alias) {
     return $ProfilesTable(attachedDatabase, alias);
   }
+
+  static JsonTypeConverter2<Sex, String, String> $convertersex =
+      const EnumNameConverter<Sex>(Sex.values);
+  static JsonTypeConverter2<ActivityLevel, String, String>
+  $converteractivityLevel = const EnumNameConverter<ActivityLevel>(
+    ActivityLevel.values,
+  );
+  static JsonTypeConverter2<Goal, String, String> $convertergoal =
+      const EnumNameConverter<Goal>(Goal.values);
 }
 
 class Profile extends DataClass implements Insertable<Profile> {
   final int id;
 
-  /// Free text; only used to pick a BMR formula coefficient.
-  final String sex;
+  /// Only used to pick a Mifflin-St Jeor constant. See [Sex].
+  final Sex sex;
   final int birthYear;
   final double heightCm;
 
-  /// Mifflin-St Jeor activity multiplier, e.g. 1.375 for lightly active.
-  final double activityMultiplier;
+  /// Fallback for days with no step data; measured movement wins when present.
+  final ActivityLevel activityLevel;
+  final Goal goal;
 
   /// Target weight in kg. Null means "no target, just report".
   final double? targetWeightKg;
@@ -328,7 +334,7 @@ class Profile extends DataClass implements Insertable<Profile> {
   /// Monday is 1, Sunday is 7.
   final int weekEndsOn;
 
-  /// Used to turn steps into distance when Health Connect reports only steps.
+  /// Used to turn steps into distance. Seeded from height, then editable.
   final double strideCm;
   final int dailyStepGoal;
   final String createdAt;
@@ -338,7 +344,8 @@ class Profile extends DataClass implements Insertable<Profile> {
     required this.sex,
     required this.birthYear,
     required this.heightCm,
-    required this.activityMultiplier,
+    required this.activityLevel,
+    required this.goal,
     this.targetWeightKg,
     required this.weekEndsOn,
     required this.strideCm,
@@ -350,10 +357,19 @@ class Profile extends DataClass implements Insertable<Profile> {
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
-    map['sex'] = Variable<String>(sex);
+    {
+      map['sex'] = Variable<String>($ProfilesTable.$convertersex.toSql(sex));
+    }
     map['birth_year'] = Variable<int>(birthYear);
     map['height_cm'] = Variable<double>(heightCm);
-    map['activity_multiplier'] = Variable<double>(activityMultiplier);
+    {
+      map['activity_level'] = Variable<String>(
+        $ProfilesTable.$converteractivityLevel.toSql(activityLevel),
+      );
+    }
+    {
+      map['goal'] = Variable<String>($ProfilesTable.$convertergoal.toSql(goal));
+    }
     if (!nullToAbsent || targetWeightKg != null) {
       map['target_weight_kg'] = Variable<double>(targetWeightKg);
     }
@@ -371,7 +387,8 @@ class Profile extends DataClass implements Insertable<Profile> {
       sex: Value(sex),
       birthYear: Value(birthYear),
       heightCm: Value(heightCm),
-      activityMultiplier: Value(activityMultiplier),
+      activityLevel: Value(activityLevel),
+      goal: Value(goal),
       targetWeightKg: targetWeightKg == null && nullToAbsent
           ? const Value.absent()
           : Value(targetWeightKg),
@@ -390,11 +407,16 @@ class Profile extends DataClass implements Insertable<Profile> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return Profile(
       id: serializer.fromJson<int>(json['id']),
-      sex: serializer.fromJson<String>(json['sex']),
+      sex: $ProfilesTable.$convertersex.fromJson(
+        serializer.fromJson<String>(json['sex']),
+      ),
       birthYear: serializer.fromJson<int>(json['birthYear']),
       heightCm: serializer.fromJson<double>(json['heightCm']),
-      activityMultiplier: serializer.fromJson<double>(
-        json['activityMultiplier'],
+      activityLevel: $ProfilesTable.$converteractivityLevel.fromJson(
+        serializer.fromJson<String>(json['activityLevel']),
+      ),
+      goal: $ProfilesTable.$convertergoal.fromJson(
+        serializer.fromJson<String>(json['goal']),
       ),
       targetWeightKg: serializer.fromJson<double?>(json['targetWeightKg']),
       weekEndsOn: serializer.fromJson<int>(json['weekEndsOn']),
@@ -409,10 +431,17 @@ class Profile extends DataClass implements Insertable<Profile> {
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
-      'sex': serializer.toJson<String>(sex),
+      'sex': serializer.toJson<String>(
+        $ProfilesTable.$convertersex.toJson(sex),
+      ),
       'birthYear': serializer.toJson<int>(birthYear),
       'heightCm': serializer.toJson<double>(heightCm),
-      'activityMultiplier': serializer.toJson<double>(activityMultiplier),
+      'activityLevel': serializer.toJson<String>(
+        $ProfilesTable.$converteractivityLevel.toJson(activityLevel),
+      ),
+      'goal': serializer.toJson<String>(
+        $ProfilesTable.$convertergoal.toJson(goal),
+      ),
       'targetWeightKg': serializer.toJson<double?>(targetWeightKg),
       'weekEndsOn': serializer.toJson<int>(weekEndsOn),
       'strideCm': serializer.toJson<double>(strideCm),
@@ -424,10 +453,11 @@ class Profile extends DataClass implements Insertable<Profile> {
 
   Profile copyWith({
     int? id,
-    String? sex,
+    Sex? sex,
     int? birthYear,
     double? heightCm,
-    double? activityMultiplier,
+    ActivityLevel? activityLevel,
+    Goal? goal,
     Value<double?> targetWeightKg = const Value.absent(),
     int? weekEndsOn,
     double? strideCm,
@@ -439,7 +469,8 @@ class Profile extends DataClass implements Insertable<Profile> {
     sex: sex ?? this.sex,
     birthYear: birthYear ?? this.birthYear,
     heightCm: heightCm ?? this.heightCm,
-    activityMultiplier: activityMultiplier ?? this.activityMultiplier,
+    activityLevel: activityLevel ?? this.activityLevel,
+    goal: goal ?? this.goal,
     targetWeightKg: targetWeightKg.present
         ? targetWeightKg.value
         : this.targetWeightKg,
@@ -455,9 +486,10 @@ class Profile extends DataClass implements Insertable<Profile> {
       sex: data.sex.present ? data.sex.value : this.sex,
       birthYear: data.birthYear.present ? data.birthYear.value : this.birthYear,
       heightCm: data.heightCm.present ? data.heightCm.value : this.heightCm,
-      activityMultiplier: data.activityMultiplier.present
-          ? data.activityMultiplier.value
-          : this.activityMultiplier,
+      activityLevel: data.activityLevel.present
+          ? data.activityLevel.value
+          : this.activityLevel,
+      goal: data.goal.present ? data.goal.value : this.goal,
       targetWeightKg: data.targetWeightKg.present
           ? data.targetWeightKg.value
           : this.targetWeightKg,
@@ -480,7 +512,8 @@ class Profile extends DataClass implements Insertable<Profile> {
           ..write('sex: $sex, ')
           ..write('birthYear: $birthYear, ')
           ..write('heightCm: $heightCm, ')
-          ..write('activityMultiplier: $activityMultiplier, ')
+          ..write('activityLevel: $activityLevel, ')
+          ..write('goal: $goal, ')
           ..write('targetWeightKg: $targetWeightKg, ')
           ..write('weekEndsOn: $weekEndsOn, ')
           ..write('strideCm: $strideCm, ')
@@ -497,7 +530,8 @@ class Profile extends DataClass implements Insertable<Profile> {
     sex,
     birthYear,
     heightCm,
-    activityMultiplier,
+    activityLevel,
+    goal,
     targetWeightKg,
     weekEndsOn,
     strideCm,
@@ -513,7 +547,8 @@ class Profile extends DataClass implements Insertable<Profile> {
           other.sex == this.sex &&
           other.birthYear == this.birthYear &&
           other.heightCm == this.heightCm &&
-          other.activityMultiplier == this.activityMultiplier &&
+          other.activityLevel == this.activityLevel &&
+          other.goal == this.goal &&
           other.targetWeightKg == this.targetWeightKg &&
           other.weekEndsOn == this.weekEndsOn &&
           other.strideCm == this.strideCm &&
@@ -524,10 +559,11 @@ class Profile extends DataClass implements Insertable<Profile> {
 
 class ProfilesCompanion extends UpdateCompanion<Profile> {
   final Value<int> id;
-  final Value<String> sex;
+  final Value<Sex> sex;
   final Value<int> birthYear;
   final Value<double> heightCm;
-  final Value<double> activityMultiplier;
+  final Value<ActivityLevel> activityLevel;
+  final Value<Goal> goal;
   final Value<double?> targetWeightKg;
   final Value<int> weekEndsOn;
   final Value<double> strideCm;
@@ -539,7 +575,8 @@ class ProfilesCompanion extends UpdateCompanion<Profile> {
     this.sex = const Value.absent(),
     this.birthYear = const Value.absent(),
     this.heightCm = const Value.absent(),
-    this.activityMultiplier = const Value.absent(),
+    this.activityLevel = const Value.absent(),
+    this.goal = const Value.absent(),
     this.targetWeightKg = const Value.absent(),
     this.weekEndsOn = const Value.absent(),
     this.strideCm = const Value.absent(),
@@ -549,10 +586,11 @@ class ProfilesCompanion extends UpdateCompanion<Profile> {
   });
   ProfilesCompanion.insert({
     this.id = const Value.absent(),
-    required String sex,
+    required Sex sex,
     required int birthYear,
     required double heightCm,
-    this.activityMultiplier = const Value.absent(),
+    required ActivityLevel activityLevel,
+    required Goal goal,
     this.targetWeightKg = const Value.absent(),
     this.weekEndsOn = const Value.absent(),
     this.strideCm = const Value.absent(),
@@ -562,6 +600,8 @@ class ProfilesCompanion extends UpdateCompanion<Profile> {
   }) : sex = Value(sex),
        birthYear = Value(birthYear),
        heightCm = Value(heightCm),
+       activityLevel = Value(activityLevel),
+       goal = Value(goal),
        createdAt = Value(createdAt),
        updatedAt = Value(updatedAt);
   static Insertable<Profile> custom({
@@ -569,7 +609,8 @@ class ProfilesCompanion extends UpdateCompanion<Profile> {
     Expression<String>? sex,
     Expression<int>? birthYear,
     Expression<double>? heightCm,
-    Expression<double>? activityMultiplier,
+    Expression<String>? activityLevel,
+    Expression<String>? goal,
     Expression<double>? targetWeightKg,
     Expression<int>? weekEndsOn,
     Expression<double>? strideCm,
@@ -582,7 +623,8 @@ class ProfilesCompanion extends UpdateCompanion<Profile> {
       if (sex != null) 'sex': sex,
       if (birthYear != null) 'birth_year': birthYear,
       if (heightCm != null) 'height_cm': heightCm,
-      if (activityMultiplier != null) 'activity_multiplier': activityMultiplier,
+      if (activityLevel != null) 'activity_level': activityLevel,
+      if (goal != null) 'goal': goal,
       if (targetWeightKg != null) 'target_weight_kg': targetWeightKg,
       if (weekEndsOn != null) 'week_ends_on': weekEndsOn,
       if (strideCm != null) 'stride_cm': strideCm,
@@ -594,10 +636,11 @@ class ProfilesCompanion extends UpdateCompanion<Profile> {
 
   ProfilesCompanion copyWith({
     Value<int>? id,
-    Value<String>? sex,
+    Value<Sex>? sex,
     Value<int>? birthYear,
     Value<double>? heightCm,
-    Value<double>? activityMultiplier,
+    Value<ActivityLevel>? activityLevel,
+    Value<Goal>? goal,
     Value<double?>? targetWeightKg,
     Value<int>? weekEndsOn,
     Value<double>? strideCm,
@@ -610,7 +653,8 @@ class ProfilesCompanion extends UpdateCompanion<Profile> {
       sex: sex ?? this.sex,
       birthYear: birthYear ?? this.birthYear,
       heightCm: heightCm ?? this.heightCm,
-      activityMultiplier: activityMultiplier ?? this.activityMultiplier,
+      activityLevel: activityLevel ?? this.activityLevel,
+      goal: goal ?? this.goal,
       targetWeightKg: targetWeightKg ?? this.targetWeightKg,
       weekEndsOn: weekEndsOn ?? this.weekEndsOn,
       strideCm: strideCm ?? this.strideCm,
@@ -627,7 +671,9 @@ class ProfilesCompanion extends UpdateCompanion<Profile> {
       map['id'] = Variable<int>(id.value);
     }
     if (sex.present) {
-      map['sex'] = Variable<String>(sex.value);
+      map['sex'] = Variable<String>(
+        $ProfilesTable.$convertersex.toSql(sex.value),
+      );
     }
     if (birthYear.present) {
       map['birth_year'] = Variable<int>(birthYear.value);
@@ -635,8 +681,15 @@ class ProfilesCompanion extends UpdateCompanion<Profile> {
     if (heightCm.present) {
       map['height_cm'] = Variable<double>(heightCm.value);
     }
-    if (activityMultiplier.present) {
-      map['activity_multiplier'] = Variable<double>(activityMultiplier.value);
+    if (activityLevel.present) {
+      map['activity_level'] = Variable<String>(
+        $ProfilesTable.$converteractivityLevel.toSql(activityLevel.value),
+      );
+    }
+    if (goal.present) {
+      map['goal'] = Variable<String>(
+        $ProfilesTable.$convertergoal.toSql(goal.value),
+      );
     }
     if (targetWeightKg.present) {
       map['target_weight_kg'] = Variable<double>(targetWeightKg.value);
@@ -666,7 +719,8 @@ class ProfilesCompanion extends UpdateCompanion<Profile> {
           ..write('sex: $sex, ')
           ..write('birthYear: $birthYear, ')
           ..write('heightCm: $heightCm, ')
-          ..write('activityMultiplier: $activityMultiplier, ')
+          ..write('activityLevel: $activityLevel, ')
+          ..write('goal: $goal, ')
           ..write('targetWeightKg: $targetWeightKg, ')
           ..write('weekEndsOn: $weekEndsOn, ')
           ..write('strideCm: $strideCm, ')
@@ -4975,6 +5029,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $WeeksTable weeks = $WeeksTable(this);
   late final $AiCallsTable aiCalls = $AiCallsTable(this);
   late final $AchievementsTable achievements = $AchievementsTable(this);
+  late final ProfileDao profileDao = ProfileDao(this as AppDatabase);
   late final FoodsDao foodsDao = FoodsDao(this as AppDatabase);
   late final JournalDao journalDao = JournalDao(this as AppDatabase);
   late final TrackingDao trackingDao = TrackingDao(this as AppDatabase);
@@ -5000,10 +5055,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
 typedef $$ProfilesTableCreateCompanionBuilder =
     ProfilesCompanion Function({
       Value<int> id,
-      required String sex,
+      required Sex sex,
       required int birthYear,
       required double heightCm,
-      Value<double> activityMultiplier,
+      required ActivityLevel activityLevel,
+      required Goal goal,
       Value<double?> targetWeightKg,
       Value<int> weekEndsOn,
       Value<double> strideCm,
@@ -5014,10 +5070,11 @@ typedef $$ProfilesTableCreateCompanionBuilder =
 typedef $$ProfilesTableUpdateCompanionBuilder =
     ProfilesCompanion Function({
       Value<int> id,
-      Value<String> sex,
+      Value<Sex> sex,
       Value<int> birthYear,
       Value<double> heightCm,
-      Value<double> activityMultiplier,
+      Value<ActivityLevel> activityLevel,
+      Value<Goal> goal,
       Value<double?> targetWeightKg,
       Value<int> weekEndsOn,
       Value<double> strideCm,
@@ -5040,10 +5097,11 @@ class $$ProfilesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get sex => $composableBuilder(
-    column: $table.sex,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<Sex, Sex, String> get sex =>
+      $composableBuilder(
+        column: $table.sex,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<int> get birthYear => $composableBuilder(
     column: $table.birthYear,
@@ -5055,10 +5113,17 @@ class $$ProfilesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<double> get activityMultiplier => $composableBuilder(
-    column: $table.activityMultiplier,
-    builder: (column) => ColumnFilters(column),
+  ColumnWithTypeConverterFilters<ActivityLevel, ActivityLevel, String>
+  get activityLevel => $composableBuilder(
+    column: $table.activityLevel,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
   );
+
+  ColumnWithTypeConverterFilters<Goal, Goal, String> get goal =>
+      $composableBuilder(
+        column: $table.goal,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<double> get targetWeightKg => $composableBuilder(
     column: $table.targetWeightKg,
@@ -5120,8 +5185,13 @@ class $$ProfilesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<double> get activityMultiplier => $composableBuilder(
-    column: $table.activityMultiplier,
+  ColumnOrderings<String> get activityLevel => $composableBuilder(
+    column: $table.activityLevel,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get goal => $composableBuilder(
+    column: $table.goal,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -5168,7 +5238,7 @@ class $$ProfilesTableAnnotationComposer
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
 
-  GeneratedColumn<String> get sex =>
+  GeneratedColumnWithTypeConverter<Sex, String> get sex =>
       $composableBuilder(column: $table.sex, builder: (column) => column);
 
   GeneratedColumn<int> get birthYear =>
@@ -5177,10 +5247,14 @@ class $$ProfilesTableAnnotationComposer
   GeneratedColumn<double> get heightCm =>
       $composableBuilder(column: $table.heightCm, builder: (column) => column);
 
-  GeneratedColumn<double> get activityMultiplier => $composableBuilder(
-    column: $table.activityMultiplier,
-    builder: (column) => column,
-  );
+  GeneratedColumnWithTypeConverter<ActivityLevel, String> get activityLevel =>
+      $composableBuilder(
+        column: $table.activityLevel,
+        builder: (column) => column,
+      );
+
+  GeneratedColumnWithTypeConverter<Goal, String> get goal =>
+      $composableBuilder(column: $table.goal, builder: (column) => column);
 
   GeneratedColumn<double> get targetWeightKg => $composableBuilder(
     column: $table.targetWeightKg,
@@ -5236,10 +5310,11 @@ class $$ProfilesTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
-                Value<String> sex = const Value.absent(),
+                Value<Sex> sex = const Value.absent(),
                 Value<int> birthYear = const Value.absent(),
                 Value<double> heightCm = const Value.absent(),
-                Value<double> activityMultiplier = const Value.absent(),
+                Value<ActivityLevel> activityLevel = const Value.absent(),
+                Value<Goal> goal = const Value.absent(),
                 Value<double?> targetWeightKg = const Value.absent(),
                 Value<int> weekEndsOn = const Value.absent(),
                 Value<double> strideCm = const Value.absent(),
@@ -5251,7 +5326,8 @@ class $$ProfilesTableTableManager
                 sex: sex,
                 birthYear: birthYear,
                 heightCm: heightCm,
-                activityMultiplier: activityMultiplier,
+                activityLevel: activityLevel,
+                goal: goal,
                 targetWeightKg: targetWeightKg,
                 weekEndsOn: weekEndsOn,
                 strideCm: strideCm,
@@ -5262,10 +5338,11 @@ class $$ProfilesTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
-                required String sex,
+                required Sex sex,
                 required int birthYear,
                 required double heightCm,
-                Value<double> activityMultiplier = const Value.absent(),
+                required ActivityLevel activityLevel,
+                required Goal goal,
                 Value<double?> targetWeightKg = const Value.absent(),
                 Value<int> weekEndsOn = const Value.absent(),
                 Value<double> strideCm = const Value.absent(),
@@ -5277,7 +5354,8 @@ class $$ProfilesTableTableManager
                 sex: sex,
                 birthYear: birthYear,
                 heightCm: heightCm,
-                activityMultiplier: activityMultiplier,
+                activityLevel: activityLevel,
+                goal: goal,
                 targetWeightKg: targetWeightKg,
                 weekEndsOn: weekEndsOn,
                 strideCm: strideCm,

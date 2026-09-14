@@ -54,11 +54,19 @@ class WitcherButton extends StatelessWidget {
             Icon(icon, size: 16, color: enabled ? text : Hue.parchmentFaint),
             const SizedBox(width: Space.sm),
           ],
-          Text(
-            label.toUpperCase(),
-            style: Type.label(
-              size: 12,
-              color: enabled ? text : Hue.parchmentFaint,
+          // Flexible, not a bare Text: engraved labels carry wide letter
+          // spacing, and a long one beside a second button overflows at phone
+          // width. Better to tighten the label than to clip the layout.
+          Flexible(
+            child: Text(
+              label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: Type.label(
+                size: 12,
+                color: enabled ? text : Hue.parchmentFaint,
+              ),
             ),
           ),
         ],
