@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'features/design_gallery/design_gallery_screen.dart';
+import 'theme/app_theme.dart';
+
 void main() {
   runApp(const ProviderScope(child: WitchersDietApp()));
 }
 
 /// Root of the application.
 ///
-/// The real shell (Journal / Alchemy / Path / Bestiary) arrives in later tasks;
-/// T0 only proves the scaffold boots.
+/// Until the real shell exists (Journal / Alchemy / The Path / Bestiary), the
+/// app opens on the design gallery so the skin can be judged on a device.
 class WitchersDietApp extends StatelessWidget {
   const WitchersDietApp({super.key});
 
@@ -17,24 +20,8 @@ class WitchersDietApp extends StatelessWidget {
     return MaterialApp(
       title: "The Witcher's Diet",
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(useMaterial3: true),
-      home: const _Placeholder(),
-    );
-  }
-}
-
-class _Placeholder extends StatelessWidget {
-  const _Placeholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(
-        child: Text(
-          'The Path begins.',
-          style: TextStyle(fontFamily: 'Cinzel', fontSize: 22),
-        ),
-      ),
+      theme: AppTheme.build(),
+      home: const DesignGalleryScreen(),
     );
   }
 }

@@ -149,6 +149,11 @@ Dark, engraved, weathered. Never Material-default.
   Bestiary (foods) · Week's End / The Reckoning (reveal) · Signs (buffs) ·
   Toxicity (harm) · Vitality (quality) · Mutagens (perks).
 - Never use a raw colour literal in a widget. Pull from the theme tokens.
+- The design gallery (`lib/features/design_gallery/`) shows every primitive on
+  one page. Add new primitives to it, and regenerate the golden with
+  `flutter test --update-goldens --tags golden` so the skin stays reviewable
+  without a device. The golden also runs in the normal suite, so an accidental
+  visual regression fails the build.
 
 ---
 

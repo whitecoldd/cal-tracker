@@ -56,3 +56,6 @@ secrets.json
 *.apk
 *.aab
 backup/
+
+# Golden test diffs (generated on failure, never committed)
+test/**/failures/
