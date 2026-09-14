@@ -1,0 +1,38 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"
+  errors:
+    # The blackout invariant depends on exhaustive switches over SealedValue.
+    # A non-exhaustive switch must never compile.
+    non_exhaustive_switch_expression: error
+    non_exhaustive_switch_statement: error
+    # Keep the tree clean.
+    unused_import: error
+    unused_local_variable: error
+    dead_code: error
+    invalid_annotation_target: ignore
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
+
+linter:
+  rules:
+    - always_declare_return_types
+    - avoid_dynamic_calls
+    - avoid_print
+    - cancel_subscriptions
+    - close_sinks
+    - directives_ordering
+    - prefer_const_constructors
+    - prefer_const_declarations
+    - prefer_final_locals
+    - prefer_single_quotes
+    - require_trailing_commas
+    - sort_child_properties_last
+    - unawaited_futures
+    - unnecessary_parenthesis
+    - use_super_parameters

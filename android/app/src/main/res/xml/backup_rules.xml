@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android Auto Backup (API 23-30). Layer one of "survives reinstall";
+     the folder mirror in Documents/WitchersDiet is layer two. -->
+<full-backup-content>
+    <include domain="database" path="." />
+    <include domain="sharedpref" path="." />
+    <include domain="file" path="photos/" />
+    <!-- Never back up the OpenRouter key; it lives in the keystore anyway. -->
+    <exclude domain="sharedpref" path="FlutterSecureStorage.xml" />
+</full-backup-content>
