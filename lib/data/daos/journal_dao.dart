@@ -61,7 +61,12 @@ class JournalDao extends DatabaseAccessor<AppDatabase> with _$JournalDaoMixin {
         );
   }
 
-  Future<List<LoggedItem>> forDay(Day day) => watchDay(day).first;
+  /// A one-shot read of [day].
+  ///
+  /// A plain query rather than the first event of [watchDay]: there is no
+  /// reason to build and tear down a stream for a single read, and a stream
+  /// needs an event loop that a widget test's fake async does not turn.
+  Future<List<LoggedItem>> forDay(Day day) => forRange(day, day);
 
   /// Everything logged across an inclusive day range — the week's aggregate.
   Future<List<LoggedItem>> forRange(Day from, Day to) async {

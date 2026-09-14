@@ -2188,15 +2188,15 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, Entry> {
     type: DriftSqlType.double,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _unitMeta = const VerificationMeta('unit');
   @override
-  late final GeneratedColumn<String> unit = GeneratedColumn<String>(
-    'unit',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
+  late final GeneratedColumnWithTypeConverter<PortionUnit, String> unit =
+      GeneratedColumn<String>(
+        'unit',
+        aliasedName,
+        false,
+        type: DriftSqlType.string,
+        requiredDuringInsert: true,
+      ).withConverter<PortionUnit>($EntriesTable.$converterunit);
   static const VerificationMeta _gramsMeta = const VerificationMeta('grams');
   @override
   late final GeneratedColumn<double> grams = GeneratedColumn<double>(
@@ -2296,14 +2296,6 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, Entry> {
     } else if (isInserting) {
       context.missing(_quantityMeta);
     }
-    if (data.containsKey('unit')) {
-      context.handle(
-        _unitMeta,
-        unit.isAcceptableOrUnknown(data['unit']!, _unitMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_unitMeta);
-    }
     if (data.containsKey('grams')) {
       context.handle(
         _gramsMeta,
@@ -2371,10 +2363,12 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, Entry> {
         DriftSqlType.double,
         data['${effectivePrefix}quantity'],
       )!,
-      unit: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}unit'],
-      )!,
+      unit: $EntriesTable.$converterunit.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}unit'],
+        )!,
+      ),
       grams: attachedDatabase.typeMapping.read(
         DriftSqlType.double,
         data['${effectivePrefix}grams'],
@@ -2406,6 +2400,8 @@ class $EntriesTable extends Entries with TableInfo<$EntriesTable, Entry> {
   static TypeConverter<Day, int> $converterday = const DayConverter();
   static JsonTypeConverter2<MealSlot, String, String> $convertermealSlot =
       const EnumNameConverter<MealSlot>(MealSlot.values);
+  static JsonTypeConverter2<PortionUnit, String, String> $converterunit =
+      const EnumNameConverter<PortionUnit>(PortionUnit.values);
 }
 
 class Entry extends DataClass implements Insertable<Entry> {
@@ -2416,7 +2412,7 @@ class Entry extends DataClass implements Insertable<Entry> {
 
   /// What the user said: "2", "a handful", "half a plate".
   final double quantity;
-  final String unit;
+  final PortionUnit unit;
 
   /// The quantity resolved to grams. This is what every calculation uses.
   final double grams;
@@ -2456,7 +2452,9 @@ class Entry extends DataClass implements Insertable<Entry> {
       );
     }
     map['quantity'] = Variable<double>(quantity);
-    map['unit'] = Variable<String>(unit);
+    {
+      map['unit'] = Variable<String>($EntriesTable.$converterunit.toSql(unit));
+    }
     map['grams'] = Variable<double>(grams);
     if (!nullToAbsent || rawText != null) {
       map['raw_text'] = Variable<String>(rawText);
@@ -2502,7 +2500,9 @@ class Entry extends DataClass implements Insertable<Entry> {
         serializer.fromJson<String>(json['mealSlot']),
       ),
       quantity: serializer.fromJson<double>(json['quantity']),
-      unit: serializer.fromJson<String>(json['unit']),
+      unit: $EntriesTable.$converterunit.fromJson(
+        serializer.fromJson<String>(json['unit']),
+      ),
       grams: serializer.fromJson<double>(json['grams']),
       rawText: serializer.fromJson<String?>(json['rawText']),
       photoPath: serializer.fromJson<String?>(json['photoPath']),
@@ -2521,7 +2521,9 @@ class Entry extends DataClass implements Insertable<Entry> {
         $EntriesTable.$convertermealSlot.toJson(mealSlot),
       ),
       'quantity': serializer.toJson<double>(quantity),
-      'unit': serializer.toJson<String>(unit),
+      'unit': serializer.toJson<String>(
+        $EntriesTable.$converterunit.toJson(unit),
+      ),
       'grams': serializer.toJson<double>(grams),
       'rawText': serializer.toJson<String?>(rawText),
       'photoPath': serializer.toJson<String?>(photoPath),
@@ -2536,7 +2538,7 @@ class Entry extends DataClass implements Insertable<Entry> {
     Day? day,
     MealSlot? mealSlot,
     double? quantity,
-    String? unit,
+    PortionUnit? unit,
     double? grams,
     Value<String?> rawText = const Value.absent(),
     Value<String?> photoPath = const Value.absent(),
@@ -2628,7 +2630,7 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
   final Value<Day> day;
   final Value<MealSlot> mealSlot;
   final Value<double> quantity;
-  final Value<String> unit;
+  final Value<PortionUnit> unit;
   final Value<double> grams;
   final Value<String?> rawText;
   final Value<String?> photoPath;
@@ -2653,7 +2655,7 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
     required Day day,
     required MealSlot mealSlot,
     required double quantity,
-    required String unit,
+    required PortionUnit unit,
     required double grams,
     this.rawText = const Value.absent(),
     this.photoPath = const Value.absent(),
@@ -2700,7 +2702,7 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
     Value<Day>? day,
     Value<MealSlot>? mealSlot,
     Value<double>? quantity,
-    Value<String>? unit,
+    Value<PortionUnit>? unit,
     Value<double>? grams,
     Value<String?>? rawText,
     Value<String?>? photoPath,
@@ -2743,7 +2745,9 @@ class EntriesCompanion extends UpdateCompanion<Entry> {
       map['quantity'] = Variable<double>(quantity.value);
     }
     if (unit.present) {
-      map['unit'] = Variable<String>(unit.value);
+      map['unit'] = Variable<String>(
+        $EntriesTable.$converterunit.toSql(unit.value),
+      );
     }
     if (grams.present) {
       map['grams'] = Variable<double>(grams.value);
@@ -6088,7 +6092,7 @@ typedef $$EntriesTableCreateCompanionBuilder =
       required Day day,
       required MealSlot mealSlot,
       required double quantity,
-      required String unit,
+      required PortionUnit unit,
       required double grams,
       Value<String?> rawText,
       Value<String?> photoPath,
@@ -6102,7 +6106,7 @@ typedef $$EntriesTableUpdateCompanionBuilder =
       Value<Day> day,
       Value<MealSlot> mealSlot,
       Value<double> quantity,
-      Value<String> unit,
+      Value<PortionUnit> unit,
       Value<double> grams,
       Value<String?> rawText,
       Value<String?> photoPath,
@@ -6162,10 +6166,11 @@ class $$EntriesTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<String> get unit => $composableBuilder(
-    column: $table.unit,
-    builder: (column) => ColumnFilters(column),
-  );
+  ColumnWithTypeConverterFilters<PortionUnit, PortionUnit, String> get unit =>
+      $composableBuilder(
+        column: $table.unit,
+        builder: (column) => ColumnWithTypeConverterFilters(column),
+      );
 
   ColumnFilters<double> get grams => $composableBuilder(
     column: $table.grams,
@@ -6320,7 +6325,7 @@ class $$EntriesTableAnnotationComposer
   GeneratedColumn<double> get quantity =>
       $composableBuilder(column: $table.quantity, builder: (column) => column);
 
-  GeneratedColumn<String> get unit =>
+  GeneratedColumnWithTypeConverter<PortionUnit, String> get unit =>
       $composableBuilder(column: $table.unit, builder: (column) => column);
 
   GeneratedColumn<double> get grams =>
@@ -6397,7 +6402,7 @@ class $$EntriesTableTableManager
                 Value<Day> day = const Value.absent(),
                 Value<MealSlot> mealSlot = const Value.absent(),
                 Value<double> quantity = const Value.absent(),
-                Value<String> unit = const Value.absent(),
+                Value<PortionUnit> unit = const Value.absent(),
                 Value<double> grams = const Value.absent(),
                 Value<String?> rawText = const Value.absent(),
                 Value<String?> photoPath = const Value.absent(),
@@ -6423,7 +6428,7 @@ class $$EntriesTableTableManager
                 required Day day,
                 required MealSlot mealSlot,
                 required double quantity,
-                required String unit,
+                required PortionUnit unit,
                 required double grams,
                 Value<String?> rawText = const Value.absent(),
                 Value<String?> photoPath = const Value.absent(),

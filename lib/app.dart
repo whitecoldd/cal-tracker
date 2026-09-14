@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'features/design_gallery/design_gallery_screen.dart';
+import 'features/journal/journal_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'providers/app_providers.dart';
 import 'theme/app_theme.dart';
@@ -54,7 +54,7 @@ class _Routed extends ConsumerWidget {
     return switch (profile) {
       AsyncError(:final error) => _Failed(error: error),
       AsyncData(value: null) => const OnboardingScreen(),
-      AsyncData() => const DesignGalleryScreen(),
+      AsyncData() => const JournalScreen(),
       _ => const _Waiting(),
     };
   }

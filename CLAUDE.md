@@ -63,6 +63,16 @@ is wrong, however convenient.
 - Any task that adds a plugin also runs `flutter build apk --debug`. A plugin
   that resolves in pub can still fail to build on Android (this is how the
   `permission_handler` problem surfaced).
+- **Database work inside `testWidgets` must go through `tester.runAsync`.** A
+  widget-test body runs in fake async, which never turns the real event loop, so
+  an awaited drift query never completes — the test simply hangs until its
+  timeout with no useful error. Prefer handing widgets a settled snapshot
+  (override the stream provider with `Stream.value(...)`) over subscribing them
+  to a live drift stream in a test: a live stream also schedules a
+  zero-duration timer on cancel, which the binding reports as a leak.
+- Do not kill a `flutter test` run mid-flight. It can leave a half-copied
+  `sqlite3.dll` in `build/native_assets/`, and the next run dies with a
+  `PathExistsException`. If that happens, `rm -rf build/native_assets`.
 - After every task: append an entry to the Obsidian vault progress log
   (see §6) in the same commit as the code.
 - Commit messages: `T<n>: <imperative summary>`, then a short body explaining

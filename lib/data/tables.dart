@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 
 import '../domain/day.dart';
 import '../domain/energy.dart';
+import '../domain/portion.dart';
 
 /// Stores a [Day] as its `yyyymmdd` integer. See [Day] for why days are not
 /// `DateTime`.
@@ -145,7 +146,7 @@ class Entries extends Table {
 
   /// What the user said: "2", "a handful", "half a plate".
   RealColumn get quantity => real()();
-  TextColumn get unit => text()();
+  TextColumn get unit => textEnum<PortionUnit>()();
 
   /// The quantity resolved to grams. This is what every calculation uses.
   RealColumn get grams => real()();

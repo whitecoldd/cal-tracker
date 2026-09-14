@@ -12,6 +12,7 @@ import 'package:sqlite3/sqlite3.dart';
 // too, or the app fails to compile while `flutter analyze` stays clean.
 import '../domain/day.dart';
 import '../domain/energy.dart';
+import '../domain/portion.dart';
 import 'daos/ai_calls_dao.dart';
 import 'daos/foods_dao.dart';
 import 'daos/journal_dao.dart';

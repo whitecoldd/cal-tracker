@@ -4,6 +4,7 @@ import 'package:cal_tracker/data/database.dart';
 import 'package:cal_tracker/data/seed_loader.dart';
 import 'package:cal_tracker/data/tables.dart';
 import 'package:cal_tracker/domain/day.dart';
+import 'package:cal_tracker/domain/portion.dart';
 import 'package:clock/clock.dart';
 // drift exports an `isNull` query expression that shadows the matcher.
 import 'package:drift/drift.dart' hide isNull;
@@ -62,7 +63,7 @@ void main() {
             day: Day.of(2026, 9, 14),
             mealSlot: MealSlot.lunch,
             quantity: 1,
-            unit: 'g',
+            unit: PortionUnit.grams,
             grams: 100,
             createdAt: _now,
           ),
@@ -247,7 +248,7 @@ void main() {
             day: day,
             mealSlot: MealSlot.breakfast,
             quantity: grams,
-            unit: 'g',
+            unit: PortionUnit.grams,
             grams: grams,
             createdAt: _now,
           ),

@@ -1,0 +1,6 @@
+tags:
+  # Golden tests render real fonts to PNGs. They run in the normal suite so an
+  # accidental visual regression fails the build; the tag exists so they can be
+  # regenerated on their own:
+  #   flutter test --update-goldens --tags golden
+  golden:
