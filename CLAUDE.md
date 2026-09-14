@@ -52,7 +52,7 @@ is wrong, however convenient.
 ## 2. Workflow rules
 
 - **One task per commit, and push each one separately.** Never batch tasks.
-  Task list lives in the vault (`90-Progress-Log.md`) and the plan file.
+  Task list lives in the vault (`vault/90-Progress-Log.md`) and the plan file.
 - Before every commit: `flutter analyze` clean **and** `flutter test` green.
   **The analyzer is not sufficient on its own.** It has twice passed on code
   that could not compile: `database.g.dart` is a *part* of `database.dart`, so
@@ -73,8 +73,9 @@ is wrong, however convenient.
 - Do not kill a `flutter test` run mid-flight. It can leave a half-copied
   `sqlite3.dll` in `build/native_assets/`, and the next run dies with a
   `PathExistsException`. If that happens, `rm -rf build/native_assets`.
-- After every task: append an entry to the Obsidian vault progress log
-  (see §6) in the same commit as the code.
+- After every task: append an entry to `vault/90-Progress-Log.md` (see §6) in
+  the same commit as the code. The vault lives in this repo, so this is one
+  commit, not two — never commit code and leave the log entry for later.
 - Commit messages: `T<n>: <imperative summary>`, then a short body explaining
   *why*. End with the Co-Authored-By trailer.
 - Never commit secrets. The OpenRouter key lives in `flutter_secure_storage`
@@ -178,14 +179,29 @@ Dark, engraved, weathered. Never Material-default.
 
 ## 6. Obsidian vault
 
-`C:\dev\cal-tracker-vault\cal-tracker\` (outside the repo, matching the user's
-`proovia-vault` / `gravescan-vault` convention).
+`vault/` **inside this repo**. Open `C:\dev\cal-tracker\vault` as the vault
+root in Obsidian — `.obsidian/` sits there and is committed, so the theme,
+accent colour and enabled plugins travel with the repo. (`workspace*.json` is
+per-machine UI state and is gitignored.)
+
+It used to live at `C:\dev\cal-tracker-vault\cal-tracker\`, outside the repo,
+matching the user's `proovia-vault` / `gravescan-vault` convention. It was moved
+in so that a task's code and its progress-log entry land in **one commit** — the
+rule in §2 was impossible to honour across two repos.
 
 `00-Index` · `01-Vision` · `02-Architecture` · `03-Game-Design` ·
 `04-Data-Model` · `05-AI-Layer` · `90-Progress-Log`
 
 Update the relevant note whenever the thing it documents changes, and always
-append to `90-Progress-Log.md` when finishing a task. Use `[[wikilinks]]`.
+append to `vault/90-Progress-Log.md` when finishing a task. Use `[[wikilinks]]`
+between notes — Obsidian resolves them within `vault/`, so never write a
+wikilink to a source file; link those by relative path from the repo root.
+
+Attachments go in `vault/attachments/` (set as the attachment folder in
+`.obsidian/app.json`).
+
+The repo is public, so the vault is too. It holds design reasoning only —
+**no personal measurements, no weights, nothing resembling a credential.**
 
 ---
 

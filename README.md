@@ -69,8 +69,10 @@ Two layers, because Android Auto Backup alone fails silently:
 ## Development
 
 See [`CLAUDE.md`](CLAUDE.md) for the rules, especially the blackout invariant and
-the pinned-toolchain constraints. Design notes live in an Obsidian vault at
-`C:\dev\cal-tracker-vault\cal-tracker`.
+the pinned-toolchain constraints. Design notes live in the Obsidian vault in
+[`vault/`](vault/) — open that folder as the vault root in Obsidian, or just
+read the Markdown on GitHub. [`00-Index`](vault/00-Index.md) is the way in;
+[`90-Progress-Log`](vault/90-Progress-Log.md) is the build history.
 
 ```
 flutter analyze && flutter test

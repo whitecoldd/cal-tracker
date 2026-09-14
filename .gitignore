@@ -59,3 +59,9 @@ backup/
 
 # Golden test diffs (generated on failure, never committed)
 test/**/failures/
+
+# Obsidian: pane layout is per-machine, the rest of .obsidian/ is committed
+vault/.obsidian/workspace.json
+vault/.obsidian/workspace-mobile.json
+vault/.obsidian/cache
+vault/.trash/
