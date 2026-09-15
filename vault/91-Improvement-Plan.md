@@ -4,6 +4,15 @@ tags: [plan, backlog]
 
 # Improvement Plan — first-use feedback round
 
+> [!success] All six tasks shipped, T16 to T21
+> See [[90-Progress-Log]] for what each one found. Three of the five reports
+> turned out to be about things that already existed and could not be reached;
+> the other two were single causes with wide blast radii. Six further issues
+> found while reading were closed along the way.
+>
+> **Still open, and now the top of the list:** the update-survival check, and the
+> four vault gaps listed at the foot of this note.
+
 Scheduled work after the first real-device shakedown of the T14 release build.
 One entry per issue; each task lands as its own commit with its own
 [[90-Progress-Log]] entry, per `../CLAUDE.md` §2.
