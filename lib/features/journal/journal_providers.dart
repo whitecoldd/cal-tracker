@@ -7,6 +7,7 @@ import '../../data/database.dart';
 import '../../data/nutrition_adapter.dart';
 import '../../data/tables.dart';
 import '../../domain/day.dart';
+import '../../domain/food_query.dart';
 import '../../domain/nutrition.dart';
 import '../../providers/app_providers.dart';
 
@@ -133,14 +134,37 @@ final dailyTotalsProvider = Provider<DailyTotals>((ref) {
   );
 });
 
+/// Bumped whenever a food is written to the library.
+///
+/// Without it an open search sheet keeps serving a list assembled before the
+/// write: pick an Open Food Facts result, back out of the portion sheet, retype
+/// the same query, and the food that was just saved is not there. `autoDispose`
+/// alone does not cover that — the sheet never closed.
+final foodLibraryTickProvider =
+    NotifierProvider<FoodLibraryTick, int>(FoodLibraryTick.new);
+
+class FoodLibraryTick extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void changed() => state++;
+}
+
 /// Local food search: the user's own library and the seeded staples.
 ///
 /// This is steps one and two of the resolution order in CLAUDE.md §4. Anything
 /// found here costs nothing, which is what keeps the AI budget survivable.
+///
+/// Auto-disposing and keyed by query, for the reason spelled out on
+/// [remoteFoodSearchProvider]: without it every distinct string ever typed is
+/// cached for the life of the app.
 final foodSearchProvider =
-    FutureProvider.family<List<Food>, String>((ref, query) async {
-  if (query.trim().length < 2) return const [];
-  return ref.watch(databaseProvider).foodsDao.search(query);
+    FutureProvider.autoDispose.family<List<Food>, String>((ref, query) async {
+  ref.watch(foodLibraryTickProvider);
+
+  final parsed = parseFoodQuery(query);
+  if (parsed.isEmpty) return const [];
+  return ref.watch(databaseProvider).foodsDao.searchFor(parsed);
 });
 
 /// Foods logged most often, offered before the user types anything.

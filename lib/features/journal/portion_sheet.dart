@@ -26,11 +26,19 @@ class PortionSheet extends ConsumerStatefulWidget {
     required this.day,
     this.existing,
     this.initialSlot,
+    this.initialQuantity,
+    this.initialUnit,
     super.key,
   });
 
   final Food food;
   final Day day;
+
+  /// A quantity read off the search box, e.g. the 5 in "5 fried eggs".
+  final double? initialQuantity;
+
+  /// The unit that quantity was expressed in, if the query named one.
+  final PortionUnit? initialUnit;
 
   /// The entry being corrected, if this is an edit.
   final Entry? existing;
@@ -44,6 +52,8 @@ class PortionSheet extends ConsumerStatefulWidget {
     required Day day,
     Entry? existing,
     MealSlot? initialSlot,
+    double? initialQuantity,
+    PortionUnit? initialUnit,
   }) async {
     final result = await showModalBottomSheet<bool>(
       context: context,
@@ -54,6 +64,8 @@ class PortionSheet extends ConsumerStatefulWidget {
         day: day,
         existing: existing,
         initialSlot: initialSlot,
+        initialQuantity: initialQuantity,
+        initialUnit: initialUnit,
       ),
     );
     return result ?? false;
@@ -74,11 +86,25 @@ class _PortionSheetState extends ConsumerState<PortionSheet> {
     super.initState();
     final existing = widget.existing;
 
-    _unit = existing?.unit ?? _defaultUnit;
+    _unit = existing?.unit ?? widget.initialUnit ?? _defaultUnit;
     _slot = existing?.mealSlot ?? widget.initialSlot ?? _slotForTimeOfDay();
     _quantity = TextEditingController(
-      text: _format(existing?.quantity ?? _defaultQuantity),
+      text: _format(existing?.quantity ?? _openingQuantity),
     );
+  }
+
+  /// What the amount field starts at for a new entry.
+  ///
+  /// A bare number in the search box means "5 of them", not "5 grams". So a
+  /// parsed quantity is only trusted when the query named a unit, or when the
+  /// food is something that comes in pieces. Otherwise "5 fried eggs" against a
+  /// food with no piece weight would open at **5 g**, which is worse than the
+  /// ordinary 100 it replaces.
+  double get _openingQuantity {
+    final parsed = widget.initialQuantity;
+    if (parsed == null || parsed <= 0) return _defaultQuantity;
+    if (widget.initialUnit != null || _unit.usesPieceWeight) return parsed;
+    return _defaultQuantity;
   }
 
   /// A food that knows what one of it weighs is almost always eaten in pieces;

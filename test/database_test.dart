@@ -165,6 +165,89 @@ void main() {
       await db.foodsDao.upsert(_food('Rice', source: FoodSource.seed));
       expect(await db.foodsDao.search('   '), isEmpty);
     });
+
+    group('the searches that came back from first use', () {
+      test('words match in any order', () async {
+        await db.foodsDao.upsert(
+          _food('Monster Energy Ultra White', source: FoodSource.openFoodFacts),
+        );
+
+        // The old query was one LIKE over the whole string, so this matched
+        // nothing at all while "monster ultra" matched.
+        expect(
+          (await db.foodsDao.search('white monster')).single.name,
+          'Monster Energy Ultra White',
+        );
+      });
+
+      test('a leading count does not stop a food being found', () async {
+        await db.foodsDao.upsert(_food('Egg, whole', source: FoodSource.seed));
+
+        expect(
+          (await db.foodsDao.search('5 fried eggs')).map((f) => f.name),
+          isEmpty,
+          reason: 'no food is named "fried egg" here',
+        );
+        expect(
+          (await db.foodsDao.search('5 eggs')).single.name,
+          'Egg, whole',
+        );
+      });
+
+      test('a plural finds the singular it was stored under', () async {
+        await db.foodsDao.upsert(_food('Egg, whole', source: FoodSource.seed));
+        await db.foodsDao.upsert(_food('Tomato', source: FoodSource.seed));
+
+        expect((await db.foodsDao.search('eggs')).single.name, 'Egg, whole');
+        expect((await db.foodsDao.search('tomatoes')).single.name, 'Tomato');
+      });
+
+      test('a stopword does not have to appear in the food name', () async {
+        await db.foodsDao.upsert(_food('Rice pudding', source: FoodSource.seed));
+
+        // "with" is nowhere in the stored key. If it were kept as a term,
+        // every term having to match would rule the row out.
+        expect(
+          (await db.foodsDao.search('rice with pudding')).single.name,
+          'Rice pudding',
+        );
+      });
+    });
+
+    test('ranks a hand-corrected food above an AI guess', () async {
+      // The bug this replaces: the old ORDER BY promised ordering by source
+      // quality in its comment and had no ordering term on source at all, so
+      // a confident AI row outranked everything.
+      await db.foodsDao.upsert(
+        _food('Borscht bowl', source: FoodSource.ai, confidence: 0.95),
+      );
+      await db.foodsDao.upsert(
+        _food('Borscht pot', source: FoodSource.manual, confidence: 0.5),
+      );
+
+      final results = await db.foodsDao.search('borscht');
+      expect(results.map((f) => f.source).toList(),
+          [FoodSource.manual, FoodSource.ai]);
+    });
+
+    test('falls back to confidence, then to name, within one source', () async {
+      await db.foodsDao.upsert(
+        _food('Stew, thin', source: FoodSource.seed, confidence: 0.4),
+      );
+      await db.foodsDao.upsert(
+        _food('Stew, thick', source: FoodSource.seed, confidence: 0.9),
+      );
+
+      final results = await db.foodsDao.search('stew');
+      expect(results.first.name, 'Stew, thick');
+    });
+
+    test('a term that is absent excludes the row entirely', () async {
+      await db.foodsDao.upsert(_food('Brown rice', source: FoodSource.seed));
+      await db.foodsDao.upsert(_food('White bread', source: FoodSource.seed));
+
+      expect(await db.foodsDao.search('brown bread'), isEmpty);
+    });
   });
 
   group('SeedLoader', () {

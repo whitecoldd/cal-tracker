@@ -40,6 +40,17 @@ class _Remote implements FoodRemote {
 void main() {
   late AppDatabase db;
 
+  Future<void> addFood(String name) => db.foodsDao.upsert(
+        FoodsCompanion.insert(
+          name: name,
+          searchKey: name.toLowerCase(),
+          kcal: 100,
+          source: FoodSource.seed,
+          createdAt: _now,
+          updatedAt: _now,
+        ),
+      );
+
   setUp(() {
     db = AppDatabase.forTesting(NativeDatabase.memory());
   });
@@ -74,8 +85,9 @@ void main() {
           // A settled snapshot rather than a live drift stream: a stream
           // schedules a zero-duration timer on cancel that the binding
           // reports as a leak. See CLAUDE.md §2.
-          foodSearchProvider.overrideWith((ref, query) async => const []),
           recentFoodsProvider.overrideWith((ref) async => const []),
+          remoteFoodSearchProvider
+              .overrideWith((ref, query) async => const []),
         ],
         child: MaterialApp(
           theme: AppTheme.build(),
@@ -183,6 +195,74 @@ void main() {
       // It came from the library, so nothing went wrong and nothing is said.
       expect(find.byTooltip('Dismiss'), findsNothing);
       expect(find.textContaining('ledger'), findsNothing);
+    });
+  });
+
+  group('the search box', () {
+    testWidgets('finds a food whose words were typed out of order',
+        (tester) async {
+      await tester.runAsync(() => addFood('Monster Energy Ultra White'));
+      await pump(tester);
+
+      await tester.enterText(find.byType(TextField), 'white monster');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Monster Energy Ultra White'), findsOneWidget);
+    });
+
+    testWidgets('a leading count does not stop the food being found',
+        (tester) async {
+      await tester.runAsync(() => addFood('Egg, whole'));
+      await pump(tester);
+
+      await tester.enterText(find.byType(TextField), '5 eggs');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Egg, whole'), findsOneWidget);
+    });
+
+    testWidgets('clearing cannot be undone by an in-flight debounce',
+        (tester) async {
+      await tester.runAsync(() => addFood('Egg, whole'));
+      await pump(tester);
+
+      await tester.enterText(find.byType(TextField), 'egg');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(find.text('Egg, whole'), findsOneWidget);
+
+      // Type, then clear before the debounce fires. The old code set the query
+      // directly without cancelling, so the timer put the query back.
+      await tester.enterText(find.byType(TextField), 'eggs');
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.tap(find.byTooltip('Clear'));
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pumpAndSettle();
+
+      expect(find.text('EATEN LATELY'), findsOneWidget);
+      expect(find.text('IN THE LIBRARY'), findsNothing);
+    });
+
+    testWidgets('a food saved while the sheet is open shows up',
+        (tester) async {
+      await pump(tester);
+
+      await tester.enterText(find.byType(TextField), 'borscht');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+      expect(find.text('Borscht'), findsNothing);
+
+      // As a write-back would: the row lands, and the tick says so.
+      await tester.runAsync(() => addFood('Borscht'));
+      final element = tester.element(find.byType(FoodSearchSheet));
+      ProviderScope.containerOf(element)
+          .read(foodLibraryTickProvider.notifier)
+          .changed();
+      await tester.pumpAndSettle();
+
+      expect(find.text('Borscht'), findsOneWidget);
     });
   });
 }

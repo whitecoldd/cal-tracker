@@ -14,6 +14,7 @@ import '../../theme/typography.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/witcher_button.dart';
 import '../ai/ai_providers.dart';
+import 'journal_providers.dart';
 import 'meal_confirm.dart';
 
 /// Log a meal by describing it.
@@ -87,6 +88,9 @@ class _SpeakMealSheetState extends ConsumerState<SpeakMealSheet> {
     try {
       final meal = await ref.read(openRouterClientProvider).parseMeal(text);
       final resolved = await ref.read(mealResolverProvider).resolve(meal);
+      // The resolver writes anything new into the library, so an open search
+      // sheet must not keep serving a list assembled before that.
+      ref.read(foodLibraryTickProvider.notifier).changed();
 
       if (!mounted) return;
       setState(() {

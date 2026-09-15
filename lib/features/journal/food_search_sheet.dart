@@ -8,6 +8,7 @@ import '../../data/nutrition_adapter.dart';
 import '../../data/remote/remote_food.dart';
 import '../../data/tables.dart';
 import '../../domain/day.dart';
+import '../../domain/food_query.dart';
 import '../../domain/harm.dart';
 import '../../domain/nutrition.dart';
 import '../../domain/rarity.dart';
@@ -58,6 +59,7 @@ class FoodSearchSheet extends ConsumerStatefulWidget {
 class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
   final _controller = TextEditingController();
   String _query = '';
+  FoodQuery _parsed = FoodQuery.empty;
   Timer? _debounce;
 
   /// True while a food is being written to the library or a barcode resolved.
@@ -89,25 +91,36 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
     _debounce?.cancel();
     _debounce = Timer(
       const Duration(milliseconds: 250),
-      () {
-        if (mounted) {
-          setState(() {
-            _query = value;
-            // A message about the last scan has nothing to do with what is
-            // being typed now.
-            _notice = null;
-          });
-        }
-      },
+      () => _setQuery(value),
     );
   }
 
-  Future<void> _pick(Food food) async {
+  /// The single way the query changes.
+  ///
+  /// Cancelling the debounce here is the point: the clear button used to set
+  /// the query directly, so a timer scheduled a moment earlier would fire
+  /// afterwards and put the cleared query straight back.
+  void _setQuery(String value) {
+    _debounce?.cancel();
+    if (!mounted) return;
+    setState(() {
+      _query = value;
+      _parsed = parseFoodQuery(value);
+      // A message about the last scan has nothing to do with what is being
+      // typed now.
+      _notice = null;
+    });
+  }
+
+  Future<void> _pick(Food food, {bool carryQuantity = true}) async {
     final logged = await PortionSheet.show(
       context,
       food: food,
       day: widget.day,
       initialSlot: widget.slot,
+      // "5 fried eggs" should open the portion sheet at five, not at one.
+      initialQuantity: carryQuantity ? _parsed.quantity : null,
+      initialUnit: carryQuantity ? _parsed.unit : null,
     );
     if (logged && mounted) Navigator.of(context).pop();
   }
@@ -122,6 +135,7 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
     setState(() => _busy = true);
     try {
       final stored = await saveRemoteFood(ref.read(databaseProvider), remote);
+      ref.read(foodLibraryTickProvider.notifier).changed();
       if (!mounted || stored == null) return;
       await _pick(stored);
     } finally {
@@ -166,7 +180,10 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
       // outcome be added without one.
       switch (outcome) {
         case BarcodeFound(:final food):
-          await _pick(food);
+          ref.read(foodLibraryTickProvider.notifier).changed();
+          // A barcode names one specific product; whatever count is sitting in
+          // the search box is about something else.
+          await _pick(food, carryQuantity: false);
         case BarcodeUnknown():
           _say(
             'That sigil is in no ledger the app can reach. '
@@ -196,7 +213,9 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final searching = _query.trim().length >= 2;
+    // Measured on the terms rather than the raw text, so "5 eggs" searches and
+    // a lone "5" does not become a search for nothing.
+    final searching = _parsed.terms.join().length >= 2;
     final local = searching
         ? ref.watch(foodSearchProvider(_query))
         : ref.watch(recentFoodsProvider);
@@ -233,9 +252,10 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                                 ? null
                                 : IconButton(
                                     icon: const Icon(Icons.close, size: 18),
+                                    tooltip: 'Clear',
                                     onPressed: () {
                                       _controller.clear();
-                                      setState(() => _query = '');
+                                      _setQuery('');
                                     },
                                   ),
                           ),
@@ -344,7 +364,9 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
   /// used or corrected it before. A failure here is a footnote, never an error
   /// state — the app stays fully usable with no network (CLAUDE.md §4).
   Widget _remoteSliver() {
-    final remote = ref.watch(remoteFoodSearchProvider(_query));
+    // Words, never stems, and without the leading count — a stem is not a word
+    // anybody wrote, and upstream searches text.
+    final remote = ref.watch(remoteFoodSearchProvider(_parsed.remoteText));
 
     return switch (remote) {
       AsyncData(:final value) when value.isEmpty =>

@@ -1373,3 +1373,89 @@ overlapping collide on `build/native_assets/sqlite3.dll` and the second dies
 with the `PathExistsException` the rules warn about — the same wreckage as
 killing a run, reached from the other direction. `rm -rf build/native_assets`
 is still the fix. Do not start a second run while one is in flight.
+
+---
+
+## T18 — A search that finds things
+**Date:** 2026-09-15
+
+Two searches came back from first use, and both failed outright: "white monster"
+found nothing while "monster ultra" worked, and "5 fried eggs" found nothing at
+all. One cause each, plus a third nobody had noticed. 738 → 780 tests.
+
+**The old query was a single `LIKE '%<whole typed string>%'`.** So a multi-word
+search only matched words that were *adjacent and in the order typed* — "white
+monster" cannot match `monster energy ultra white` by construction — and a
+leading digit was searched for literally. There was no tokenisation, no plural
+handling and no quantity parsing anywhere in the path. Matching is now
+token-based: every term must appear, in any order.
+
+**The plural rule needs no migration, and that is the whole design.** The
+instinct is to normalise plurals on both sides, which means re-keying every row
+already on a device. It is unnecessary, because the match is *containment*, not
+equality. Stem the **query only**, with a purely *truncating* stem, and the stem
+is a prefix of both forms: `eggs` → `egg` finds a stored `egg whole` and a
+stored `scrambled eggs` alike. `search_key` keeps its exact contract, the T2 test
+pinning `'  Coca-Cola   ZERO! '` → `coca cola zero` stays green untouched, and
+`schemaVersion` stays at 1.
+
+The length floors matter more than they look: without them `is` becomes `i`,
+`fries` becomes `fr`, and `glass` becomes `gla` — terms that match nearly
+everything.
+
+**Two bugs found while writing it, both mine, both caught by tests.**
+
+The quantity parser read the *normalised* text, and normalisation strips every
+punctuation mark — so `1.5 cup rice` had already become `1 5 cup rice` and the
+half was gone before the parser saw it. The quantity is now read off the raw
+string, which is also simply more correct: the parser should see what the user
+typed.
+
+And `a dozen eggs` came out as quantity **one**, because "a" is itself a number
+word and was consumed first. An article followed by another number word now
+defers to the second.
+
+**A test expectation of mine was also wrong**, which is worth recording because
+the code was right: I had asserted `ricecakes` was a worse answer for "rice"
+than `brown rice`. It is not — the term *begins* the word, and a prefix is what
+typing into a search box means. `licorice` is the tier-2 case.
+
+**Number words earn their place.** They look like indulgence in a search box
+until you notice that *every* term must match: an unrecognised leading "dozen"
+would block the entire query and return nothing, which is strictly worse than
+what this replaces. Fifteen constant entries buy that off. Fractions, ranges and
+"a couple" are deliberately not supported — the free-text path already has a
+model behind it, and turning the search box into a second parser duplicates it.
+
+**The ranking was a lie, and is now a comparator.** `FoodsDao.search`'s comment
+promised ordering by source quality; there was no ordering term on `source` at
+all, so an AI row at confidence 0.95 outranked a seed row at 0.9 — the exact
+inversion the comment said could not happen. It is a Dart comparator now, partly
+because the tier rule is a domain rule that must be testable without a database,
+and partly because this is precisely how quietly an SQL `ORDER BY` stops meaning
+what it says it means. The `WHERE` stays in SQLite as N ANDed LIKEs.
+
+**Two stale-state bugs fixed in the same area.**
+
+`foodSearchProvider` was not `autoDispose` and never invalidated, so every
+distinct string ever typed was cached for the life of the app — and a food
+written by a barcode scan or a remote pick did not appear when the same query
+was retyped. `autoDispose` alone does not cover that case, because the sheet
+never closed; a `foodLibraryTickProvider` bumped by the three write sites does.
+
+And the clear button set the query directly without cancelling the debounce, so
+a timer scheduled a moment earlier fired afterwards and put the cleared query
+straight back. Both now go through one `_setQuery`. Reverting only that makes
+the new widget test fail, which is the check that the test is real.
+
+**One judgement call in the portion sheet.** A bare number means "5 of them",
+not "5 grams", so a parsed quantity is only trusted when the query named a unit
+or the food comes in pieces. Otherwise "5 fried eggs" against a food with no
+piece weight would open the sheet at **5 g** — worse than the 100 it replaces.
+A barcode also deliberately does not carry the count through: it names one
+specific product, and whatever number is sitting in the search box is about
+something else.
+
+**Verified:** `flutter analyze` clean, 780 tests green. Whether the seed table
+actually contains a "fried egg" is a separate question — it does not, and T19's
+hand-written foods are the answer to that.
