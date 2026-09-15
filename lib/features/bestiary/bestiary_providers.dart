@@ -54,7 +54,7 @@ final creaturesProvider = FutureProvider<List<Creature>>((ref) async {
 
   final db = ref.watch(databaseProvider);
 
-  final foods = await db.foodsDao.watchAll().first;
+  final foods = await db.foodsDao.all();
   final counts = await db.journalDao.timesEatenByFood();
   final firstSeen = await db.journalDao.firstSeenByFood();
 

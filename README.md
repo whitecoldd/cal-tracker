@@ -15,24 +15,39 @@ to it drives the wrong behaviour.
 
 So this app collects everything and reveals nothing directional until week's end.
 
-- **Mon–Sat** — calories, macros, glycemic load, toxicity, steps, streak.
-  Enough to make decisions, useless for guessing the trend.
+- **Every day except the last** — calories, macros, glycemic load, toxicity,
+  steps, streak. Enough to make decisions, useless for guessing the trend.
 - **Week's End** — energy balance, weight delta, projection, body-composition
   estimate, and a written account of the week.
 
 Weight is still logged every day. Only its *interpretation* is sealed, and that
-seal is enforced by the type system, not by UI discipline.
+seal is enforced by the type system, not by UI discipline: verdict values cross
+into the UI as `SealedValue<T>`, and a widget cannot render what it has not
+unwrapped.
+
+The week-end day is whichever weekday you pick during character creation.
 
 ## The Witcher 3 frame
 
 Harsh feedback lands better as lore than as judgement.
 
-**Journal** (today) · **Alchemy** (macros, toxicity) · **The Path** (character
-sheet) · **Bestiary** (every food you've logged) · **Week's End** (the reveal)
+| Screen | What it is |
+|---|---|
+| **Journal** | Today. Log by name, barcode, description or photograph |
+| **Alchemy** | Macro vials, the glycemic reading, Vitality and Toxicity |
+| **The Path** | Character sheet: level, streak, Adrenaline, the five Signs |
+| **Bestiary** | Every food you have eaten, as a creature with weaknesses |
+| **Week's End** | The Reckoning — the reveal, and the week's written account |
+| **Settings** | The AI key and its budget, Health Connect, the archive |
 
 Derived stats: **Vitality** (diet quality), **Toxicity** (additives, NOVA-4,
-added sugar, sodium, trans fat, alcohol), **Stamina** (activity), and five
-**Signs** mapped to real behaviours.
+free sugar, sodium, trans fat, alcohol — and it carries between days),
+**Stamina** (steps against your own goal), and five **Signs** tied to real
+behaviours.
+
+XP is awarded for logging honestly and eating well. **Never for which way the
+scale went** — a score that moved with your weight would be the verdict wearing
+a hat.
 
 > Harm flags are public food data dressed as game lore.
 > **Not medical advice.**
@@ -47,24 +62,67 @@ AI is always the *last* resort behind your own food library, a bundled seed
 table and Open Food Facts — every resolution is cached permanently, so a food
 costs at most one API call in its lifetime.
 
-## Setup
+---
 
-1. `flutter pub get`
-2. Add an [OpenRouter](https://openrouter.ai) API key in Settings (free, no card).
-   Optional — the app works offline without it.
-3. Install **Health Connect** from the Play Store for step history. Optional —
-   steps can be entered manually.
-4. `flutter run` with a device attached, or
-   `flutter build apk --release --split-per-abi` and sideload.
+## Putting it on a phone
+
+```bash
+flutter pub get
+flutter build apk --release --split-per-abi
+```
+
+The APKs land in `build/app/outputs/flutter-apk/`. Take the one that matches
+your phone — **`app-arm64-v8a-release.apk` for anything made in the last several
+years**; `armeabi-v7a` is for older 32-bit devices.
+
+Copy it across and open it. Android will ask you to allow installing from this
+source the first time.
+
+> Signed with the debug key, deliberately: this is a sideloaded personal build
+> and never goes near the Play Store. It installs and updates fine, but it will
+> not upgrade *over* a build signed with a different key — uninstall first if
+> you have been running one.
+
+Straight to a connected phone instead:
+
+```bash
+flutter run --release
+```
+
+### First run
+
+1. **Character creation** — sex, height, weight, activity level, goal, and the
+   weekday your week ends on. The last one decides when the seal lifts.
+2. **Settings → The archive → Grant file access.** Android asks separately for
+   all-files access; without it the backup mirror cannot write. Everything else
+   works without it.
+3. **Settings → Health Connect** — optional. Install Health Connect from the
+   Play Store first if you want step history, including for days you never
+   opened the app. Steps can be typed by hand instead.
+4. **Settings → The Oracle** — optional. An [OpenRouter](https://openrouter.ai)
+   key (free, no card) turns on typed-meal reading, photo reading and the weekly
+   account. The free tier gives 50 requests a day, which the app tracks and
+   shows. Everything else works without a key.
+
+Then log a meal. Search by name works offline from the first launch — there are
+132 seeded foods before you type anything.
 
 ## Data durability
 
 Two layers, because Android Auto Backup alone fails silently:
 
-1. Auto Backup of the database, prefs and photos
-2. A continuous JSON + Markdown mirror in `Documents/WitchersDiet/`, outside the
-   app sandbox — an uninstall cannot touch it, and the app offers to restore
-   from it on first launch
+1. **Auto Backup** of the database, preferences and photos — and explicitly
+   *not* the keystore holding your API key.
+2. **A JSON + Markdown mirror** in `Documents/WitchersDiet/`, outside the app
+   sandbox, written whenever the app goes to the background. An uninstall cannot
+   touch it, and the app offers to restore from it on first launch.
+
+The Markdown is there to be read: open `Journal.md` on a computer to see what the
+backup actually holds. `witchers-diet-backup.json` beside it is the one that
+restores — keep them together.
+
+**To move to a new phone:** copy the whole `Documents/WitchersDiet/` folder
+across, install the app, grant file access, and take the offer on first launch.
 
 ## Development
 
@@ -72,8 +130,13 @@ See [`CLAUDE.md`](CLAUDE.md) for the rules, especially the blackout invariant an
 the pinned-toolchain constraints. Design notes live in the Obsidian vault in
 [`vault/`](vault/) — open that folder as the vault root in Obsidian, or just
 read the Markdown on GitHub. [`00-Index`](vault/00-Index.md) is the way in;
-[`90-Progress-Log`](vault/90-Progress-Log.md) is the build history.
+[`90-Progress-Log`](vault/90-Progress-Log.md) is the build history, one entry per
+task, with the reasoning.
 
+```bash
+flutter analyze && flutter test          # 706 tests
+flutter test --update-goldens --tags golden   # after a deliberate visual change
 ```
-flutter analyze && flutter test
-```
+
+The goldens render real screens to PNGs that are committed and reviewed in the
+diff, so a visual regression fails the build without needing a device.

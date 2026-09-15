@@ -22,7 +22,7 @@ import '../reckoning/reckoning_providers.dart';
 /// frozen with 145 XP contributes 145 forever.
 final totalXpProvider = FutureProvider<int>((ref) async {
   ref.watch(journalEntriesProvider);
-  final weeks = await ref.watch(databaseProvider).weeksDao.watchHistory().first;
+  final weeks = await ref.watch(databaseProvider).weeksDao.history();
   return weeks.fold<int>(0, (sum, week) => sum + week.xpAwarded);
 });
 

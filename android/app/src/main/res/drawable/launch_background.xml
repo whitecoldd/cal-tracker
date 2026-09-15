@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@android:color/white" />
+<!-- The splash, for API 26-30. Void black with the launcher mark centred.
 
-    <!-- You can insert your own image assets here -->
-    <!-- <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@mipmap/launch_image" />
-    </item> -->
+     The mark is a vector, so it is placed as a sized layer-list item rather
+     than a <bitmap>: <bitmap> requires a raster and fails to inflate on a
+     vector. Explicit width/height because a layer-list item otherwise
+     stretches its drawable to fill the whole window.
+
+     Identical in values/ and values-night/: the app has one skin and it is
+     dark, so there is no light variant to fall back to. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/ic_launcher_background" />
+    <item
+        android:width="128dp"
+        android:height="128dp"
+        android:drawable="@drawable/ic_launcher_foreground"
+        android:gravity="center" />
 </layer-list>

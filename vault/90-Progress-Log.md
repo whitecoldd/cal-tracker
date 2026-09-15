@@ -1109,3 +1109,68 @@ build matter more than usual.
 **What a manual run still needs (T14):** an app icon, a splash screen, and a
 release APK. The reinstall test from the plan's verification list can only be
 done on a device and is the one thing here that no test can stand in for.
+
+---
+
+## T14 — Polish, and a release build
+**Date:** 2026-09-15
+
+The launcher mark, the splash, the release APKs, and a README written for
+someone about to put this on a phone. No new tests; 706 still green.
+
+**The icon is a vector, not five PNGs.** minSdk is 26, so every device this app
+runs on supports adaptive icons — which means the mark can live in the repo as
+*text*, editable in a diff and impossible to drift out of step with the theme
+tokens it borrows from. It is the app's own language: a hollow diamond node
+inside ornate corner brackets, gold `#C9A227` on void black.
+
+The stock PNGs are left in place as a fallback nothing will ever reach; a
+`mipmap-anydpi-v26` adaptive icon wins on every device above API 26.
+
+**The splash needed three files, not one.** `launch_background.xml` covers
+API 26–30, and Android 12 replaced that mechanism entirely — without a
+`values-v31/styles.xml` declaring `windowSplashScreenBackground`, a modern
+phone ignores the drawable and draws the system default. Both point at the
+same void black, and `NormalTheme` does too, so there is no white frame
+anywhere between tapping the icon and the first frame of the app.
+
+One trap on the way: `<bitmap android:src="@drawable/ic_launcher_foreground">`
+does not work — `<bitmap>` needs a raster and fails to inflate on a vector. It
+is a sized layer-list item instead, with explicit width and height, because a
+bare item stretches its drawable across the whole window.
+
+**The backup folder had two spellings.** The code said
+`Documents/WitcherDiet`, the README and [[02-Architecture]] both said
+`WitchersDiet`. Harmless today and a lost backup later — a user who moved
+phones would have copied a folder the app then did not look in. The code now
+matches the prose.
+
+**Two providers were opening a stream to read it once.** `creaturesProvider`
+and `totalXpProvider` both did `watch...().first`. Drift schedules a
+zero-duration timer when a query stream is cancelled, and there was never a
+reason to open a stream you immediately close — the same lesson as
+`JournalDao.forDay` in T4. Both DAOs gained a plain one-shot read beside the
+stream.
+
+**Release:** `flutter build apk --release --split-per-abi` succeeds with R8 and
+resource shrinking on. arm64 lands at 28.9 MB, which is mostly the two bundled
+variable fonts and the native libraries for sqlite3, Health Connect, the
+scanner and the image picker. Signed with the debug key on purpose — this is a
+sideloaded personal build and will never see the Play Store. Worth knowing: it
+will not upgrade *over* a build signed with a different key.
+
+**The README is now an install guide**, because that is what it is for: which
+ABI to take, what Android will ask, and a first-run order that matters — file
+access before the first backup, Health Connect before expecting step history,
+and the key last, since everything works without it.
+
+**Verified:** `flutter analyze` clean, 706 tests green, goldens regenerated and
+inspected, debug **and** release APKs build.
+
+**What only a phone can check.** The reinstall test from the plan's
+verification list is the one thing no test here stands in for: uninstall,
+reinstall, grant file access, take the restore offer, confirm the history
+returns. The round trip is covered against a real database and a real folder,
+but the folder in the test is a temp directory, not
+`/storage/emulated/0/Documents/`. Same for the icon and splash — they parse,
+they build, and what they *look like* is a device question.

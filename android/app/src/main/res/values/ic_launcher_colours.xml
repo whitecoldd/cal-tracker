@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Void black, the app's background token. The launcher mark, the splash and
+     the first frame of the app are all this colour, so opening the app has no
+     white flash anywhere in it. -->
+<resources>
+    <color name="ic_launcher_background">#0D0B0A</color>
+</resources>

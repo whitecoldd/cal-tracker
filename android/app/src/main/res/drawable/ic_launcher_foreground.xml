@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The launcher mark: a diamond node inside ornate corner brackets.
+
+  Drawn as a vector rather than shipped as five PNGs. minSdk is 26, so every
+  device this app runs on supports adaptive icons, and a vector keeps the mark
+  in the repo as text — editable in a diff, and impossible to have drift out of
+  step with the theme tokens it borrows from.
+
+  Both shapes are the app's own visual language: OrnatePanel's corner brackets
+  and the diamond of a skill node. Gold is #C9A227, the accent token.
+
+  The adaptive-icon safe zone is the middle 72dp of 108dp — roughly x/y 18..90.
+  Everything here stays inside it so no launcher mask can clip the brackets.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- The diamond node, filled. -->
+    <path
+        android:fillColor="#C9A227"
+        android:pathData="M54,36 L70,54 L54,72 L38,54 Z" />
+
+    <!-- Hollowed, so the mark reads as a frame rather than a blob. -->
+    <path
+        android:fillColor="#0D0B0A"
+        android:pathData="M54,44 L63,54 L54,64 L45,54 Z" />
+
+    <!-- Four corner brackets, as on every panel in the app. -->
+    <group>
+        <!-- top left -->
+        <path
+            android:fillColor="#C9A227"
+            android:pathData="M26,26 h14 v3 h-11 v11 h-3 z" />
+        <!-- top right -->
+        <path
+            android:fillColor="#C9A227"
+            android:pathData="M82,26 h-14 v3 h11 v11 h3 z" />
+        <!-- bottom left -->
+        <path
+            android:fillColor="#C9A227"
+            android:pathData="M26,82 h14 v-3 h-11 v-11 h-3 z" />
+        <!-- bottom right -->
+        <path
+            android:fillColor="#C9A227"
+            android:pathData="M82,82 h-14 v-3 h11 v-11 h3 z" />
+    </group>
+</vector>

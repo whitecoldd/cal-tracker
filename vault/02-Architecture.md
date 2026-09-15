@@ -444,6 +444,45 @@ The Markdown exists to be *read* — a row count per table, the profile, and eve
 closed week with its account. A backup nobody ever opens is a backup nobody
 discovers is broken, and the file says plainly which of the two restores.
 
+## Icon and splash (T14)
+
+Both are **vector and XML**, with no binary asset anywhere. minSdk 26 means
+every device supports adaptive icons, so the launcher mark lives in the repo as
+text — a hollow diamond node inside ornate corner brackets, the app's own
+language, gold on void black.
+
+```
+res/drawable/ic_launcher_foreground.xml
+res/mipmap-anydpi-v26/ic_launcher.xml
+res/drawable/launch_background.xml      API 26-30
+res/values-v31/styles.xml               API 31+
+```
+
+The splash needs **both** files. Android 12 replaced the `windowBackground`
+mechanism with a real API; without `values-v31` a modern phone ignores
+`launch_background.xml` and draws the system default. `NormalTheme` is void
+black too, so there is no white frame anywhere between the icon tap and the
+first Flutter frame.
+
+> [!note] `<bitmap>` cannot point at a vector
+> It needs a raster and fails to inflate. Use a sized layer-list item with
+> explicit width and height — a bare item stretches its drawable across the
+> whole window.
+
+## Release
+
+```bash
+flutter build apk --release --split-per-abi
+```
+
+R8 and resource shrinking are on. **Signed with the debug key deliberately**:
+this is a sideloaded personal build that will never see the Play Store. It
+installs and updates fine, but will not upgrade over a build signed with a
+different key.
+
+arm64 lands around 29 MB — mostly the two bundled variable fonts and the native
+libraries for sqlite3, Health Connect, the scanner and the image picker.
+
 ## Toolchain constraints
 
 Pinned to Flutter **3.41.6** / Dart **3.11.4**.

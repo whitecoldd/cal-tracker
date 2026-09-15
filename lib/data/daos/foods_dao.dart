@@ -56,6 +56,19 @@ class FoodsDao extends DatabaseAccessor<AppDatabase> with _$FoodsDaoMixin {
         .get();
   }
 
+  /// Every food, newest first. A one-shot read.
+  ///
+  /// Beside [watchAll] rather than `watchAll().first`: building and tearing
+  /// down a query stream for a single read schedules a zero-duration timer on
+  /// cancel, which the test binding reports as a leak — and there was never a
+  /// reason to open a stream you immediately close. Same lesson as
+  /// `JournalDao.forDay` in T4.
+  Future<List<Food>> all() => (select(foods)
+        ..orderBy([
+          (f) => OrderingTerm(expression: f.createdAt, mode: OrderingMode.desc),
+        ]))
+      .get();
+
   /// Watches every food, newest first — the Bestiary.
   Stream<List<Food>> watchAll() => (select(foods)
         ..orderBy([(f) => OrderingTerm(expression: f.createdAt, mode: OrderingMode.desc)]))

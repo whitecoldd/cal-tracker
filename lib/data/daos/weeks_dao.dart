@@ -15,6 +15,16 @@ class WeeksDao extends DatabaseAccessor<AppDatabase> with _$WeeksDaoMixin {
       (select(weeks)..where((w) => w.weekStart.equals(weekStart.value)))
           .getSingleOrNull();
 
+  /// Every closed week, newest first. A one-shot read.
+  ///
+  /// See [FoodsDao.all] for why this exists beside the stream.
+  Future<List<Week>> history() => (select(weeks)
+        ..where((w) => w.revealed.equals(true))
+        ..orderBy([
+          (w) => OrderingTerm(expression: w.weekStart, mode: OrderingMode.desc),
+        ]))
+      .get();
+
   /// Every closed week, newest first.
   Stream<List<Week>> watchHistory() => (select(weeks)
         ..where((w) => w.revealed.equals(true))

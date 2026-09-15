@@ -47,7 +47,7 @@ class BackupService {
   /// The whole point is that it survives the app being uninstalled, and that
   /// the user can reach it with a file manager or a USB cable.
   static const String defaultDirectory =
-      '/storage/emulated/0/Documents/WitcherDiet';
+      '/storage/emulated/0/Documents/WitchersDiet';
 
   static const String jsonName = 'witchers-diet-backup.json';
   static const String markdownName = 'Journal.md';
