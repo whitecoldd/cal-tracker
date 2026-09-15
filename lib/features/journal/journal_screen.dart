@@ -11,10 +11,7 @@ import '../../theme/typography.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
 import '../activity/activity_panel.dart';
-import '../alchemy/alchemy_screen.dart';
-import '../path/path_screen.dart';
-import '../reckoning/reckoning_screen.dart';
-import '../settings/settings_screen.dart';
+import '../shell/paths_drawer.dart';
 import 'food_search_sheet.dart';
 import 'journal_providers.dart';
 import 'portion_sheet.dart';
@@ -34,66 +31,8 @@ class JournalScreen extends ConsumerWidget {
     final totals = ref.watch(dailyTotalsProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Journal'),
-        actions: [
-          IconButton(
-            tooltip: 'Settings',
-            icon: const Icon(Icons.settings_outlined),
-            color: Hue.parchmentDim,
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => Scaffold(
-                  appBar: AppBar(title: const Text('Settings')),
-                  body: const SafeArea(child: SettingsScreen()),
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: 'The Path',
-            icon: const Icon(Icons.hexagon_outlined),
-            color: Hue.gold,
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => Scaffold(
-                  appBar: AppBar(title: const Text('The Path')),
-                  body: const SafeArea(child: PathScreen()),
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: 'The Reckoning',
-            icon: const Icon(Icons.lock_outline),
-            color: Hue.gold,
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => Scaffold(
-                  appBar: AppBar(title: const Text('Week')),
-                  body: const SafeArea(child: ReckoningScreen()),
-                ),
-              ),
-            ),
-          ),
-          IconButton(
-            tooltip: 'Alchemy',
-            icon: const Icon(Icons.science_outlined),
-            color: Hue.gold,
-            // A push rather than a nav shell: the Journal is still the only
-            // home, and T12 adds the real shell once there are more screens to
-            // put in it.
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => Scaffold(
-                  appBar: AppBar(title: const Text('Alchemy')),
-                  body: const SafeArea(child: AlchemyScreen()),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+      appBar: AppBar(title: const Text('Journal')),
+      drawer: const PathsDrawer(),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: Hue.gold,
         foregroundColor: Hue.voidBlack,

@@ -951,3 +951,78 @@ carries forward — and that belongs with the Bestiary and rarity work in T12b
 rather than bolted onto the sheet. Yrden also reads a water log the app has no
 way to fill yet; the sign is wired and tested but will sit low until there is a
 way to record a glass of water.
+
+---
+
+## T12b — The Bestiary and mutagens
+**Date:** 2026-09-15
+
+Every food ever logged as a creature entry, with its stats and weaknesses;
+mutagens granted when a week seals; and — unplanned, but forced — a navigation
+drawer. 46 new tests, 686 in total.
+
+**The Bestiary shows what has been *eaten*, not what is known.** The seed table
+is in the library from the first launch, so a collection that claimed 132
+creatures on day one would mean nothing. "Known" and "caught" are separate
+counts, and the whole library is one chip away for anyone who wants it.
+
+**A creature's rarity and weaknesses come from the same two calls the food
+picker makes** — `rankFood` and `readFoodToxins`. Nothing new was invented
+here, which is the point: a food must not read Epic in the picker and Rare in
+the collection. Sorting happens in Dart rather than SQL for the same reason —
+rarity and toxicity are *derived*, and pushing them into the database would
+mean storing a score the scoring engine could later disagree with.
+
+The creature sheet is a harm surface, so it carries the standing disclaimer and
+every weakness states the public guideline it is measured against. A flag is
+never a bare accusation. There is a test scanning the rendered sheet for
+diagnostic phrasing.
+
+**Mutagens are behaviour, never outcome.** Granted at the seal for a complete
+week, good diet quality, days at the step goal, and a week out of the packet.
+No condition may read weight, weight change, or energy balance — a perk that
+depended on the verdict would *be* the verdict, arriving on the character sheet
+the Monday after. There is a test running the same week with a 1.4 kg loss, no
+change and a 1.4 kg gain and asserting identical perks.
+
+They are decided from the **frozen summary**, so re-running the grant on an
+archived week always gives the same answer, and `unlock` ignores a repeat award
+for the same week — safe to call on every open, like the seal it rides along
+with.
+
+The empty-week trap from T6 showed up again: a week with nothing logged has no
+toxicity at all, so White Honey would pass on an *absence of evidence*. Guarded
+and tested.
+
+> [!note] Five icons stopped fitting, so the app got a drawer
+> Adding the Bestiary made a fifth app-bar action. Five 48-pixel buttons plus a
+> title do not fit across 360 logical pixels, and the fix was not a smaller
+> icon — it was admitting the app now has places to *go*. A drawer holds as
+> many as it grows and gives each one the word that names it, which matters
+> here because the vocabulary is load-bearing (CLAUDE.md §5) and an icon alone
+> does not carry "The Reckoning".
+>
+> Worth noting that the crowding was the signal, not the problem. The plan
+> deferred a nav shell to T12 and this is the moment it actually became due.
+
+The path golden then failed with `!timersPending` rather than a pixel diff: the
+new mutagen panel reached providers nobody had overridden, which woke a live
+drift stream, which leaks a zero-duration timer on cancel. Exactly the leak
+CLAUDE.md §2 describes. Same lesson as T10 and T11 — **a screen that gains a
+provider breaks that screen's tests** — but a third failure mode for it.
+
+**Verified:** `flutter analyze` clean, 686 tests green, goldens regenerated and
+inspected. `flutter build apk --debug` succeeds.
+
+**Gaps left open, deliberately:**
+
+- **Yrden still reads a water log nothing writes.** Carried from T12a. The sign
+  is wired and tested; it will sit low until there is a way to record a glass
+  of water.
+- **Mutagen bonuses are computed but not yet spent.** `MutagenBonus` is shown
+  on the character sheet and applied nowhere — XP is awarded at the seal before
+  the following week's perks exist. Wiring the carry-forward means deciding
+  whether a perk earned in week N applies to N+1's award or its *scoring*, and
+  that is a design call rather than a wiring one.
+- **The Bestiary has no image.** `imagePath` is carried through from Open Food
+  Facts and never rendered; the card has no room for it as drawn.

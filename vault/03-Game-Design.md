@@ -127,10 +127,48 @@ Each food gets a Gwent-style card. Rarity from NOVA group + nutrient density:
 Common → Rare → Epic. Lentils are Epic; a NOVA-4 energy drink is Common and
 carries visible toxicity.
 
-### Mutagens
+### Mutagens (T12b)
 
-Weekly perks, granted at the reveal for hitting targets. They persist and
-modify the following week's scoring — the only mechanic that carries forward.
+Weekly perks, granted at the reveal. The only mechanic that carries forward.
+
+| Mutagen | Earned for | Effect |
+|---|---|---|
+| **Green Blood** | all 7 days logged | +10% experience |
+| **Red Vitriol** | average Vitality ≥ 70 | +10% experience |
+| **Blue Essence** | 5+ days at the step goal | +10% adrenaline |
+| **White Honey** | average Toxicity ≤ 25 | toxicity fades 15% faster |
+
+> [!warning] Every condition is behaviour, never outcome
+> No mutagen may read weight, weight change, or energy balance. A perk that
+> depended on the verdict would **be** the verdict — it would arrive on the
+> character sheet the Monday after and answer the question the app exists to
+> defer. There is a test running an identical week with a 1.4 kg loss, no
+> change, and a 1.4 kg gain, asserting the perks come out the same.
+
+Decided from the **frozen** `WeekSummary`, so re-running the grant on an
+archived week always gives the same answer. Stacking is capped at +50% per
+effect, so a long run of good weeks cannot compound into a figure that makes
+the earlier ones look worthless.
+
+A week with nothing logged earns nothing — the same trap as Vitality in T6,
+where an empty day passes every *restraint* condition on an absence of
+evidence.
+
+### The Bestiary (T12b)
+
+Every food ever logged, as a creature entry: rarity, stats per 100 g, and its
+**weaknesses** — the harm flags, each stating the public guideline it is
+measured against rather than making a bare accusation.
+
+Shows what has been **eaten**, not what is known. The seed table is in the
+library from first launch, so "caught" and "known" are separate counts and a
+collection claiming 132 creatures on day one would mean nothing.
+
+Rarity and weaknesses come from `rankFood` and `readFoodToxins` — the same two
+calls the food picker makes. A food must not read Epic in the picker and Rare
+in the collection. Sorting is done in Dart rather than SQL because both are
+*derived*: storing them as columns would mean keeping a score the engine could
+later disagree with.
 
 ## Harm model
 

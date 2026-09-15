@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../domain/mutagens.dart';
 import '../../domain/progression.dart';
 import '../../domain/sealed_value.dart';
 import '../../domain/signs.dart';
@@ -11,6 +12,7 @@ import '../../widgets/runic_divider.dart';
 import '../../widgets/sealed_node.dart';
 import '../../widgets/sign_glyph.dart';
 import '../../widgets/stat_bar.dart';
+import '../bestiary/bestiary_providers.dart';
 import 'path_providers.dart';
 
 /// The Path — the character sheet.
@@ -35,6 +37,8 @@ class PathScreen extends ConsumerWidget {
         _Discipline(),
         SizedBox(height: Space.lg),
         _Signs(),
+        SizedBox(height: Space.lg),
+        _Mutagens(),
         SizedBox(height: Space.lg),
         _Body(),
         SizedBox(height: Space.huge),
@@ -226,6 +230,89 @@ class _SignLine extends StatelessWidget {
             style: Type.prose(
               size: 12,
               color: charge >= 0.6 ? Hue.gold : Hue.parchmentDim,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Perks earned at past reveals.
+///
+/// The only mechanic that carries forward. Every condition is behaviour — a
+/// perk that depended on the scale would *be* the verdict, arriving on the
+/// character sheet the Monday after. See `domain/mutagens.dart`.
+class _Mutagens extends ConsumerWidget {
+  const _Mutagens();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final earned = ref.watch(earnedMutagensProvider).valueOrNull ?? const [];
+    final bonus = ref.watch(mutagenBonusProvider).valueOrNull;
+
+    return OrnatePanel(
+      title: 'Mutagens',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (earned.isEmpty)
+            Text(
+              'None yet. They are granted when a week closes, for how the '
+              'week was lived rather than for what the scale did.',
+              style: Type.lore(size: 12),
+            )
+          else ...[
+            for (final mutagen in earned) _MutagenRow(mutagen: mutagen),
+            if (bonus != null && !bonus.isEmpty) ...[
+              const RunicDivider(),
+              Text(
+                _bonusLine(bonus),
+                style: Type.lore(size: 11, color: Hue.parchmentFaint),
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _bonusLine(MutagenBonus bonus) {
+    final parts = <String>[
+      if (bonus.experience > 0)
+        '+${(bonus.experience * 100).round()}% experience',
+      if (bonus.adrenaline > 0)
+        '+${(bonus.adrenaline * 100).round()}% adrenaline',
+      if (bonus.purge > 0) 'toxicity fades ${(bonus.purge * 100).round()}% faster',
+    ];
+    return 'Carried into the week ahead: ${parts.join(', ')}.';
+  }
+}
+
+class _MutagenRow extends StatelessWidget {
+  const _MutagenRow({required this.mutagen});
+
+  final Mutagen mutagen;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Space.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.science_outlined, size: 14, color: Hue.toxicity),
+          const SizedBox(width: Space.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  mutagen.title.toUpperCase(),
+                  style: Type.label(color: Hue.gold),
+                ),
+                Text(mutagen.lore, style: Type.lore(size: 11)),
+              ],
             ),
           ),
         ],

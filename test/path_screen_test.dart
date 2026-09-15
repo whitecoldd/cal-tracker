@@ -1,6 +1,8 @@
+import 'package:cal_tracker/domain/mutagens.dart';
 import 'package:cal_tracker/domain/progression.dart';
 import 'package:cal_tracker/domain/sealed_value.dart';
 import 'package:cal_tracker/domain/signs.dart';
+import 'package:cal_tracker/features/bestiary/bestiary_providers.dart';
 import 'package:cal_tracker/features/path/path_providers.dart';
 import 'package:cal_tracker/features/path/path_screen.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
@@ -48,6 +50,13 @@ void main() {
           currentWeightProvider.overrideWithValue(weight),
           weightChangeProvider.overrideWithValue(AsyncData(change)),
           daysUntilRevealProvider.overrideWithValue(daysUntilReveal),
+          earnedMutagensProvider.overrideWith(
+            (ref) async => const [Mutagen.greenBlood, Mutagen.whiteHoney],
+          ),
+          mutagenBonusProvider.overrideWith(
+            (ref) async =>
+                bonusOf(const [Mutagen.greenBlood, Mutagen.whiteHoney]),
+          ),
         ],
         child: MaterialApp(
           theme: AppTheme.build(),

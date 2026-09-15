@@ -359,6 +359,21 @@ Health Connect being absent is a **state, not an error**: Settings offers to
 install it, and steps can be typed in the Journal either way. The app reads
 movement and never writes any, which the permission screen says out loud.
 
+## Getting about (T12b)
+
+The Journal carried every other screen as an app-bar action until the Bestiary
+made a fifth. Five 48-pixel buttons plus a title do not fit across 360 logical
+pixels, so the destinations moved into a drawer.
+
+```
+lib/features/shell/paths_drawer.dart
+```
+
+The crowding was the signal rather than the problem: the plan deferred a
+navigation shell to T12, and that is when it fell due. A drawer also gives each
+destination the **word** that names it, which matters because the vocabulary is
+load-bearing (CLAUDE.md §5) — an icon alone does not carry "The Reckoning".
+
 ## Durability — "survives reinstall"
 
 Two independent layers, because Android Auto Backup alone is not trustworthy

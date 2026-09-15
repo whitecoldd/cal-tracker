@@ -1,6 +1,9 @@
 import 'package:clock/clock.dart';
 
+import 'package:drift/drift.dart' show Value;
+
 import '../domain/day.dart';
+import '../domain/mutagens.dart';
 import '../domain/reckoning.dart';
 import '../domain/week_summary.dart';
 import 'ai/openrouter_client.dart';
@@ -93,6 +96,8 @@ class WeekArchive {
       xpAwarded: summary.xp,
     );
 
+    await _grantMutagens(reckoning.weekStart, summary);
+
     return ArchivedWeek(
       weekStart: reckoning.weekStart,
       summary: summary,
@@ -111,6 +116,25 @@ class WeekArchive {
       return await _ai.weeklyNarrative(facts);
     } on AiFailure {
       return null;
+    }
+  }
+
+  /// Grants the perks a week earned.
+  ///
+  /// Decided from the frozen summary, so re-running this on an archived week
+  /// always gives the same answer — and `unlock` ignores a repeat award for
+  /// the same week, so it is safe to call more than once.
+  Future<void> _grantMutagens(Day weekStart, WeekSummary summary) async {
+    final stamp = clock.now().toIso8601String();
+
+    for (final mutagen in earnedBy(summary)) {
+      await _weeks.unlock(
+        AchievementsCompanion.insert(
+          code: mutagen.code,
+          weekStart: Value(weekStart),
+          unlockedAt: stamp,
+        ),
+      );
     }
   }
 

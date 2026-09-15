@@ -103,6 +103,42 @@ class JournalDao extends DatabaseAccessor<AppDatabase> with _$JournalDaoMixin {
     return rows.map((r) => Day(r.read(entries.day)!)).toSet();
   }
 
+  /// How many times each food has ever been logged, keyed by food id.
+  ///
+  /// One grouped query rather than a count per food: the Bestiary shows the
+  /// whole library at once, and a query per row would make the screen's cost
+  /// grow with the size of the collection it exists to celebrate.
+  Future<Map<int, int>> timesEatenByFood() async {
+    final count = entries.id.count();
+    final rows = await (selectOnly(entries)
+          ..addColumns([entries.foodId, count])
+          ..groupBy([entries.foodId]))
+        .get();
+
+    return {
+      for (final row in rows)
+        row.read(entries.foodId)!: row.read(count) ?? 0,
+    };
+  }
+
+  /// The day each food was first logged, keyed by food id.
+  ///
+  /// The Bestiary is a collection, and a collection wants to know when each
+  /// entry was found.
+  Future<Map<int, Day>> firstSeenByFood() async {
+    final earliest = entries.day.min();
+    final rows = await (selectOnly(entries)
+          ..addColumns([entries.foodId, earliest])
+          ..groupBy([entries.foodId]))
+        .get();
+
+    return {
+      for (final row in rows)
+        if (row.read(earliest) != null)
+          row.read(entries.foodId)!: Day(row.read(earliest)!),
+    };
+  }
+
   Future<int> add(EntriesCompanion entry) => into(entries).insert(entry);
 
   Future<bool> updateEntry(Entry entry) => update(entries).replace(entry);
