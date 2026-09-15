@@ -886,3 +886,68 @@ panel, and the sealed one is unchanged. `flutter build apk --debug` succeeds.
 and shown, but levels are a character-sheet concept and the curve belongs with
 the rest of progression in T12a. Animating a level-up before there are levels
 would have been a placeholder.
+
+---
+
+## T12a — The Path
+**Date:** 2026-09-15
+
+The character sheet: levels and ranks, the streak, Adrenaline, the five Signs,
+and the chained weight node. 49 new tests, 640 in total.
+
+**The design decision this task turned on: a streak is good to *show* and bad
+to *pay*.**
+
+An all-or-nothing streak that a single missed day destroys gives the user a
+reason to invent a meal to keep it alive. This app's one demand is that they
+log honestly, and a mechanic that pays for dishonesty would corrupt the only
+dataset it has.
+
+So the streak is **display** and Adrenaline is **reward**, and Adrenaline is
+driven by days-logged-in-the-last-seven rather than by the streak. A missed day
+costs a seventh, never everything. The sheet says so in as many words, because
+a mercy the user cannot see does not change their behaviour.
+
+**Nothing on this screen moves with the scale.** Levels come from XP, and XP is
+awarded for logging, diet quality and movement (T11) — never for direction. A
+level that moved with the weight would be the verdict wearing a hat: it could
+not be shown on a daily screen without leaking the answer. The one weight
+figure here is the current weigh-in, which is always visible; its *change* sits
+chained, and there is a test asserting nothing shaped like `±N kg` is in the
+tree while sealed.
+
+**`Sign` moved from the widget layer into `domain/`**, exactly as `Rarity` did
+in T6 and for the same reason: which sign is lit is a nutrition judgement, what
+it looks like is the theme's business. The charging rules had never been
+written down at all — the glyph took a `charge` and every caller invented one.
+
+**Igni reads the Vitality protein component directly** rather than recomputing
+protein adequacy. Two rules for the same thing eventually disagree, and a day
+that scores well on protein in Alchemy must not leave Igni dark on The Path.
+There is a test asserting the two agree.
+
+**Total XP is summed from the sealed weeks, not kept as a running total.** A
+counter can drift from the history it claims to summarise; a fold over frozen
+rows cannot. A week sealed at 145 XP contributes 145 forever.
+
+Small honesty in Axii: a day with no carbohydrate at all scores *neutral* on
+the steadiness term rather than perfect. An absent glycemic load is not
+evidence of an even day.
+
+> [!note] A third 360-pixel overflow
+> A label beside a numeral in a `Row` with neither able to shrink. The same
+> shape as T6's two. Phone width is 360 logical pixels and an engraved label is
+> wide; the reflex now is that any label-plus-figure row needs an `Expanded` on
+> the label before it is written, not after a test finds it.
+
+**Verified:** `flutter analyze` clean, 640 tests green, goldens regenerated and
+inspected — the sheet shows five glyphs at real charges, Yrden visibly dim, and
+the weight node chained with its countdown. `flutter build apk --debug`
+succeeds.
+
+**Not done here:** mutagens, and the level-up animation. Mutagens are weekly
+perks that modify the *following* week's scoring — the only mechanic that
+carries forward — and that belongs with the Bestiary and rarity work in T12b
+rather than bolted onto the sheet. Yrden also reads a water log the app has no
+way to fill yet; the sign is wired and tested but will sit low until there is a
+way to record a glass of water.

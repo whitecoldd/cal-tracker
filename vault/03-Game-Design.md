@@ -80,17 +80,46 @@ disguise* — it could not appear on a daily screen without leaking the answer,
 and a score seen once a week is a far weaker motivator. The reveal says so out
 loud: *"Never for which way the scale went."*
 
+### Levels and the streak (T12a)
+
+Levels come from total XP, which comes from sealed weeks. Costs rise by 25 XP a
+level from a base of 150, so the first level lands after roughly one good week
+and later ones take longer. Ranks change in **bands** — Novice, Wanderer,
+Path-walker, Witcher, Master of the Path — so a new title means something.
+
+> [!warning] A streak is good to *show* and bad to *pay*
+> An all-or-nothing streak that one missed day destroys gives the user a reason
+> to **invent a meal** to keep it alive. The app's only demand is honest
+> logging, and a mechanic that pays for dishonesty corrupts the one dataset it
+> has.
+>
+> So the streak is display, and **Adrenaline** — the XP multiplier, 1.0 to 1.5
+> — is driven by days-logged-in-the-last-seven instead. A missed day costs a
+> seventh, never everything. The character sheet says so out loud, because a
+> mercy the user cannot see does not change their behaviour.
+
 ### Signs
 
-Five buffs, each tied to a real behaviour:
+Five buffs, each tied to a real behaviour, each charged 0–1 (T12a):
 
-| Sign | Fuels |
-|---|---|
-| **Igni** | Protein adequacy / thermic effect |
-| **Quen** | Fibre + micronutrient coverage |
-| **Aard** | Activity — steps and distance |
-| **Axii** | Consistency — logging streak + glycemic stability |
-| **Yrden** | Hydration and meal-timing discipline |
+| Sign | Fuels | Charged from |
+|---|---|---|
+| **Igni** | Protein adequacy / thermic effect | the Vitality protein component, directly |
+| **Quen** | Fibre + micronutrient coverage | fibre density 60%, whole-food share 40% |
+| **Aard** | Activity — steps and distance | steps 75%, distance 25%, against the step goal |
+| **Axii** | Consistency + glycemic stability | days logged 70%, glycemic load 30% |
+| **Yrden** | Hydration and meal-timing | water vs 2 L 60%, meal slots used 40% |
+
+Igni reads the Vitality component rather than recomputing protein adequacy:
+two rules for the same thing eventually disagree, and a day that scores well on
+protein in Alchemy must not leave Igni dark on The Path.
+
+Axii scores a day with **no** carbohydrate as neutral rather than perfect — an
+absent glycemic load is not evidence of an even day.
+
+Yrden's meal term counts *distinct slots used*, not clock times. The app does
+not police when someone eats; spreading across the day is the only claim being
+made, and it is a weak one.
 
 ### Food rarity
 

@@ -12,6 +12,7 @@ import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
 import '../activity/activity_panel.dart';
 import '../alchemy/alchemy_screen.dart';
+import '../path/path_screen.dart';
 import '../reckoning/reckoning_screen.dart';
 import '../settings/settings_screen.dart';
 import 'food_search_sheet.dart';
@@ -45,6 +46,19 @@ class JournalScreen extends ConsumerWidget {
                 builder: (_) => Scaffold(
                   appBar: AppBar(title: const Text('Settings')),
                   body: const SafeArea(child: SettingsScreen()),
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: 'The Path',
+            icon: const Icon(Icons.hexagon_outlined),
+            color: Hue.gold,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(title: const Text('The Path')),
+                  body: const SafeArea(child: PathScreen()),
                 ),
               ),
             ),

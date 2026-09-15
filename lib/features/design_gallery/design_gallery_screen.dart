@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/rarity.dart';
 import '../../domain/sealed_value.dart';
+import '../../domain/signs.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
 import '../../widgets/alchemy_vial.dart';

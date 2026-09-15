@@ -2,37 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../domain/signs.dart';
 import '../theme/tokens.dart';
 import '../theme/typography.dart';
 
 /// The five Signs. Each maps to a real behaviour — see the vault's
 /// `03-Game-Design` note.
-enum Sign {
-  /// Protein adequacy / thermic effect.
-  igni('Igni', 'Protein & burn'),
-
-  /// Fibre and micronutrient coverage.
-  quen('Quen', 'Fibre & shield'),
-
-  /// Activity — steps and distance.
-  aard('Aard', 'Force & motion'),
-
-  /// Consistency — logging streak and glycemic stability.
-  axii('Axii', 'Control & calm'),
-
-  /// Hydration and meal-timing discipline.
-  yrden('Yrden', 'Water & timing');
-
-  const Sign(this.title, this.blurb);
-
-  final String title;
-  final String blurb;
-}
-
-/// A Sign rune drawn inside its circle, dimmed when the buff is inactive.
-///
-/// The runes are drawn geometry rather than glyphs from a font so they stay
-/// sharp at any size and can be charged (0..1) to show partial progress.
 class SignGlyph extends StatelessWidget {
   const SignGlyph({
     required this.sign,
