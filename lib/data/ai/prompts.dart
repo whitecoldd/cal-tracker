@@ -12,6 +12,7 @@
 library;
 
 import '../../domain/portion.dart';
+import '../../domain/week_summary.dart';
 
 abstract final class Prompts {
   /// Shared preamble. Every call carries it.
@@ -101,6 +102,38 @@ Task: estimate the weight in grams of a described portion of one food.
       final name = pieceName ?? 'piece';
       buffer.writeln('One $name of this food weighs about ${gramsPerPiece}g.');
     }
+
+    return buffer.toString().trim();
+  }
+
+  /// The week's figures, as the model sees them.
+  ///
+  /// Takes [NarrativeFacts] rather than loose numbers because that type cannot
+  /// be built from a sealed week — so this function physically cannot be
+  /// called about a week still in progress.
+  static String narrativeUser(NarrativeFacts facts) {
+    final buffer = StringBuffer()
+      ..writeln('Days logged: ${facts.loggedDays} of 7')
+      ..writeln(
+        'Energy balance: ${facts.energyBalanceKcal.round()} kcal across the '
+        'week (${facts.averageDailyBalanceKcal.round()} a day)',
+      )
+      ..writeln(
+        'Projected change from that balance: '
+        '${facts.projectedChangeKg.toStringAsFixed(2)} kg',
+      )
+      ..writeln('Average diet quality: ${facts.averageVitality.round()} of 100')
+      ..writeln('Steps: ${facts.steps}');
+
+    final delta = facts.weightDeltaKg;
+    if (delta != null) {
+      buffer.writeln('Measured weight change: ${delta.toStringAsFixed(2)} kg');
+    } else {
+      buffer.writeln('Measured weight change: not enough weigh-ins');
+    }
+
+    final trend = facts.trend;
+    if (trend != null) buffer.writeln('Direction: ${trend.label}');
 
     return buffer.toString().trim();
   }

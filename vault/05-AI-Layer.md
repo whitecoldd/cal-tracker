@@ -203,6 +203,46 @@ all if the picture is not of food.
 model's mistake and the day's totals, and two copies of it would eventually
 disagree about what they show.
 
+## The weekly narrative (T11)
+
+The fourth and last permitted use, and the **only** call given verdict data.
+All four are now live.
+
+### `NarrativeFacts` is the guard
+
+`weeklyNarrative` takes `NarrativeFacts`, and `NarrativeFacts.from` returns
+null unless the `Reckoning` it is built from is actually revealed. There is no
+other constructor. So the one exception to the blackout has no syntax for
+misuse — you cannot write code that asks a model to describe a week still in
+progress, whatever a comment says.
+
+Same shape as `RevealGate.gate` taking a callback: the wrong thing is made
+unwriteable rather than discouraged.
+
+### One call, once, per week
+
+| Situation | What happens |
+|---|---|
+| Week seals | One call |
+| Screen re-opened | Nothing — the week is already sealed |
+| App restarted | Nothing — read from `weeks.narrative` |
+| **The call failed** | **Nothing.** The week keeps its null |
+
+The last row is the one worth stating. Retrying a failed narrative on every
+visit is exactly how fifty requests a day disappear, so a week that did not get
+an account never asks again.
+
+A failure never blocks the seal. No key, no network, no budget — the week
+freezes with every figure it has. The account is flavour on top of the numbers,
+and refusing to seal because a model was unreachable would lose the numbers to
+save the prose.
+
+### Sealing is triggered by opening the screen
+
+There is no background job in a serverless app, so a week closes when the user
+comes to read it. `WeekArchive.seal` is idempotent, which is what makes calling
+it on every open safe.
+
 ## The four permitted uses
 
 1. **Free-text meal parsing** — "two eggs and a slice of rye" → structured items

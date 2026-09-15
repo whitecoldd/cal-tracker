@@ -70,6 +70,7 @@ class Reckoning {
     required this.trend,
     required this.projectedChangeKg,
     required this.bodyFatPercent,
+    required this.dailyBalances,
   });
 
   final Day weekStart;
@@ -112,6 +113,12 @@ class Reckoning {
 
   /// Body fat estimate, per cent.
   final SealedValue<double?> bodyFatPercent;
+
+  /// Each logged day's own balance, oldest first — the shape of the week.
+  ///
+  /// Sealed like the rest. Plotting these before the week closes would draw
+  /// the verdict as a picture, which is no better than printing it.
+  final SealedValue<List<double>> dailyBalances;
 
   /// Whether this week may be read at all.
   ///
@@ -189,6 +196,12 @@ Reckoning reckon({
     },
   );
 
+  final dailyBalances = gate.gate<List<double>>(
+    anyDayOfWeek,
+    today: today,
+    compute: () => [for (final d in logged) d.balanceKcal],
+  );
+
   final bodyFat = gate.gate<double?>(
     anyDayOfWeek,
     today: today,
@@ -211,6 +224,7 @@ Reckoning reckon({
     trend: trend,
     projectedChangeKg: projected,
     bodyFatPercent: bodyFat,
+    dailyBalances: dailyBalances,
   );
 }
 

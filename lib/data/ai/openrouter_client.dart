@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../../domain/parsed_meal.dart';
 import '../../domain/portion.dart';
+import '../../domain/week_summary.dart';
 import '../daos/ai_calls_dao.dart';
 import '../tables.dart';
 import 'ai_decode.dart';
@@ -132,6 +133,27 @@ class OpenRouterClient {
     );
 
     return AiDecode.meal(json);
+  }
+
+  /// Writes the single weekly account.
+  ///
+  /// The fourth and last permitted use, and the **only** call given verdict
+  /// data. It takes [NarrativeFacts], which cannot be constructed from a week
+  /// that is still sealed — so there is no way to write code that asks a model
+  /// to describe a week before it closes. See CLAUDE.md §1.
+  ///
+  /// Returns null if the model answered with nothing usable. The reveal screen
+  /// simply shows no narrative rather than spending another call retrying: one
+  /// per week is the whole budget for this.
+  Future<String?> weeklyNarrative(NarrativeFacts facts) async {
+    final json = await _structured(
+      purpose: AiPurpose.weeklyNarrative,
+      system: Prompts.narrativeSystem(),
+      user: Prompts.narrativeUser(facts),
+      schema: AiSchemas.narrative,
+    );
+
+    return AiDecode.narrative(json);
   }
 
   /// Estimates what a vague portion weighs.

@@ -1,6 +1,4 @@
-import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:cal_tracker/data/ai/ai_key_store.dart';
 import 'package:cal_tracker/data/ai/openrouter_client.dart';
@@ -12,74 +10,7 @@ import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// One canned reply.
-class _Reply {
-  const _Reply.ok(this.body) : status = 200;
-  const _Reply.status(this.status) : body = '{}';
-
-  final int status;
-  final String body;
-}
-
-/// Stands in for the network.
-///
-/// No test in this file may reach OpenRouter: a real call would need a real
-/// key, and a key must never be in the repo (CLAUDE.md §2). It would also cost
-/// one of fifty daily requests per run, which is not a budget a test suite can
-/// draw on.
-class _FakeAdapter implements HttpClientAdapter {
-  _FakeAdapter(this.replies);
-
-  /// One reply per request, in order. Runs out deliberately rather than
-  /// repeating, so a test that makes an unexpected extra call fails loudly.
-  final List<_Reply> replies;
-
-  final List<Map<String, dynamic>> requests = [];
-  final List<Map<String, List<String>>> headers = [];
-
-  int get callCount => requests.length;
-
-  /// The models asked, in the order they were asked.
-  List<String> get modelsTried =>
-      requests.map((r) => r['model'] as String).toList();
-
-  @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? requestStream,
-    Future<void>? cancelFuture,
-  ) async {
-    // At the adapter layer Dio has not serialised the body yet, so `data` is
-    // still the map the client built. Handle both shapes so the fake does not
-    // depend on where in the pipeline it is installed.
-    final data = options.data;
-    requests.add(
-      data is String
-          ? jsonDecode(data) as Map<String, dynamic>
-          : Map<String, dynamic>.from(data as Map),
-    );
-    headers.add({
-      for (final entry in options.headers.entries)
-        entry.key: [entry.value.toString()],
-    });
-
-    if (requests.length > replies.length) {
-      throw StateError('unexpected call ${requests.length}');
-    }
-
-    final reply = replies[requests.length - 1];
-    return ResponseBody.fromString(
-      reply.body,
-      reply.status,
-      headers: {
-        Headers.contentTypeHeader: [Headers.jsonContentType],
-      },
-    );
-  }
-
-  @override
-  void close({bool force = false}) {}
-}
+import 'support/fake_openrouter.dart';
 
 /// A well-formed chat-completions reply carrying [payload] as JSON.
 String _reply(Object payload) => jsonEncode({
@@ -130,12 +61,12 @@ void main() {
   setUp(() => db = AppDatabase.forTesting(NativeDatabase.memory()));
   tearDown(() async => db.close());
 
-  ({OpenRouterClient client, _FakeAdapter adapter}) build({
-    required List<_Reply> replies,
+  ({OpenRouterClient client, FakeOpenRouterAdapter adapter}) build({
+    required List<FakeReply> replies,
     String? key = 'sk-or-v1-testtesttesttesttest',
     bool purchased = false,
   }) {
-    final adapter = _FakeAdapter(replies);
+    final adapter = FakeOpenRouterAdapter(replies);
     final dio = Dio()..httpClientAdapter = adapter;
 
     return (
@@ -178,7 +109,7 @@ void main() {
 
   group('the model chain', () {
     test('uses the first model when it answers', () async {
-      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
 
       final meal = await built.client.parseMeal('two eggs');
 
@@ -188,8 +119,8 @@ void main() {
 
     test('falls through to the next model on an HTTP error', () async {
       final built = build(replies: [
-        const _Reply.status(429),
-        _Reply.ok(_reply(_mealPayload)),
+        const FakeReply.status(429),
+        FakeReply.ok(_reply(_mealPayload)),
       ]);
 
       final meal = await built.client.parseMeal('two eggs');
@@ -204,14 +135,14 @@ void main() {
     test('falls through when a model returns unusable content', () async {
       // A schema violation is the model's fault, not the network's.
       final built = build(replies: [
-        _Reply.ok(jsonEncode({
+        FakeReply.ok(jsonEncode({
           'choices': [
             {
               'message': {'content': 'Sorry, I cannot do that.'},
             },
           ],
         })),
-        _Reply.ok(_reply(_mealPayload)),
+        FakeReply.ok(_reply(_mealPayload)),
       ]);
 
       final meal = await built.client.parseMeal('two eggs');
@@ -222,9 +153,9 @@ void main() {
 
     test('gives up once every model has failed', () async {
       final built = build(replies: [
-        const _Reply.status(500),
-        const _Reply.status(500),
-        const _Reply.status(500),
+        const FakeReply.status(500),
+        const FakeReply.status(500),
+        const FakeReply.status(500),
       ]);
 
       await expectLater(
@@ -236,9 +167,9 @@ void main() {
 
     test('tries the chain in the documented order', () async {
       final built = build(replies: [
-        const _Reply.status(500),
-        const _Reply.status(500),
-        _Reply.ok(_reply(_mealPayload)),
+        const FakeReply.status(500),
+        const FakeReply.status(500),
+        FakeReply.ok(_reply(_mealPayload)),
       ]);
 
       await built.client.parseMeal('two eggs');
@@ -271,8 +202,8 @@ void main() {
       // OpenRouter charges the rate limit against the request, not the result,
       // so a failed call is a spent call.
       final built = build(replies: [
-        const _Reply.status(500),
-        _Reply.ok(_reply(_mealPayload)),
+        const FakeReply.status(500),
+        FakeReply.ok(_reply(_mealPayload)),
       ]);
 
       await built.client.parseMeal('two eggs');
@@ -286,7 +217,7 @@ void main() {
       await withClock(Clock.fixed(noon), () async {
         await recordEarlierToday(50, today: noon);
 
-        final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+        final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
 
         await expectLater(
           built.client.parseMeal('two eggs'),
@@ -311,7 +242,7 @@ void main() {
         await recordEarlierToday(50, today: noon);
 
         final built = build(
-          replies: [_Reply.ok(_reply(_mealPayload))],
+          replies: [FakeReply.ok(_reply(_mealPayload))],
           purchased: true,
         );
 
@@ -330,7 +261,7 @@ void main() {
           );
         }
 
-        final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+        final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
 
         await expectLater(
           built.client.parseMeal('two eggs'),
@@ -360,7 +291,7 @@ void main() {
     test('is constrained to a strict JSON schema', () async {
       // Never parse prose. A malformed reply costs a retry, and a retry is a
       // call. See CLAUDE.md §4.
-      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
       await built.client.parseMeal('two eggs');
 
       final format =
@@ -373,7 +304,7 @@ void main() {
     });
 
     test('carries the key as a bearer token', () async {
-      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
       await built.client.parseMeal('two eggs');
 
       expect(
@@ -384,14 +315,14 @@ void main() {
 
     test('is deterministic', () async {
       // Extraction, not writing.
-      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
       await built.client.parseMeal('two eggs');
 
       expect(built.adapter.requests.single['temperature'], 0);
     });
 
     test('sends the user text and the system rules', () async {
-      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
       await built.client.parseMeal('two eggs and a slice of rye');
 
       final messages =
@@ -407,8 +338,8 @@ void main() {
       // The blackout, asserted on the wire rather than only in the prompt
       // builders. See CLAUDE.md §1.
       final built = build(replies: [
-        _Reply.ok(_reply(_mealPayload)),
-        _Reply.ok(_reply(_portionPayload)),
+        FakeReply.ok(_reply(_mealPayload)),
+        FakeReply.ok(_reply(_portionPayload)),
       ]);
 
       await built.client.parseMeal('two eggs');
@@ -449,7 +380,7 @@ void main() {
     const dataUri = 'data:image/jpeg;base64,AAAA';
 
     test('sends the image beside the instruction', () async {
-      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
 
       final meal = await built.client.parsePhoto(imageDataUri: dataUri);
 
@@ -469,7 +400,7 @@ void main() {
     });
 
     test('is one request, however many foods are on the plate', () async {
-      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
 
       await built.client.parsePhoto(imageDataUri: dataUri);
 
@@ -478,7 +409,7 @@ void main() {
     });
 
     test('carries the user note when there is one', () async {
-      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
 
       await built.client.parsePhoto(
         imageDataUri: dataUri,
@@ -495,7 +426,7 @@ void main() {
     });
 
     test('omits the note when it is blank', () async {
-      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
 
       await built.client.parsePhoto(imageDataUri: dataUri, note: '   ');
 
@@ -508,8 +439,8 @@ void main() {
 
     test('shares the schema and the chain with the typed path', () async {
       final built = build(replies: [
-        const _Reply.status(500),
-        _Reply.ok(_reply(_mealPayload)),
+        const FakeReply.status(500),
+        FakeReply.ok(_reply(_mealPayload)),
       ]);
 
       await built.client.parsePhoto(imageDataUri: dataUri);
@@ -527,7 +458,7 @@ void main() {
     });
 
     test('is attributed to the photo purpose', () async {
-      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
 
       await built.client.parsePhoto(imageDataUri: dataUri);
 
@@ -546,7 +477,7 @@ void main() {
     });
 
     test('carries no verdict data', () async {
-      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
 
       await built.client.parsePhoto(
         imageDataUri: dataUri,
@@ -562,7 +493,7 @@ void main() {
 
   group('portion estimation', () {
     test('decodes an estimate', () async {
-      final built = build(replies: [_Reply.ok(_reply(_portionPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_portionPayload))]);
 
       final estimate = await built.client.estimatePortion(
         foodName: 'Almonds',
@@ -575,7 +506,7 @@ void main() {
     });
 
     test('is attributed to its own purpose in the log', () async {
-      final built = build(replies: [_Reply.ok(_reply(_portionPayload))]);
+      final built = build(replies: [FakeReply.ok(_reply(_portionPayload))]);
 
       await built.client.estimatePortion(
         foodName: 'Almonds',

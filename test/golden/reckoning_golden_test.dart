@@ -1,10 +1,12 @@
 @Tags(['golden'])
 library;
 
+import 'package:cal_tracker/data/week_archive.dart';
 import 'package:cal_tracker/domain/day.dart';
 import 'package:cal_tracker/domain/energy.dart';
 import 'package:cal_tracker/domain/reckoning.dart';
 import 'package:cal_tracker/domain/reveal_gate.dart';
+import 'package:cal_tracker/domain/week_summary.dart';
 import 'package:cal_tracker/features/reckoning/reckoning_providers.dart';
 import 'package:cal_tracker/features/reckoning/reckoning_screen.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
@@ -45,7 +47,7 @@ void main() {
   setUpAll(loadAppFonts);
 
   Future<void> pump(WidgetTester tester, Reckoning reckoning) async {
-    tester.view.physicalSize = const Size(1080, 2400);
+    tester.view.physicalSize = const Size(1080, 4200);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
 
@@ -56,6 +58,33 @@ void main() {
             const RevealGate(weekEndsOn: DateTime.sunday),
           ),
           weekReckoningProvider.overrideWith((ref) async => reckoning),
+          archivedWeekProvider.overrideWith(
+            (ref) async => reckoning.isRevealed
+                ? const ArchivedWeek(
+                    weekStart: _monday,
+                    narrative:
+                        'Seven days on the road, and the ledger closed light. '
+                        'The scale gave back nine hundred grams; the ledger '
+                        'expected half a kilo, and the difference is water, as '
+                        'it always is. Nothing was skipped.',
+                    summary: WeekSummary(
+                      loggedDays: 7,
+                      energyBalanceKcal: -3850,
+                      averageDailyBalanceKcal: -550,
+                      projectedChangeKg: -0.5,
+                      averageVitality: 68,
+                      averageToxicity: 31,
+                      steps: 58000,
+                      goalDays: 4,
+                      xp: 145,
+                      weightDeltaKg: -0.9,
+                      trend: WeightTrend.falling,
+                      dailyBalances: [-610, -480, -720, -540, -390, -650, -460],
+                      dailyWeights: [82, 81.8, 81.5, 81.4, 81.1],
+                    ),
+                  )
+                : null,
+          ),
         ],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,

@@ -2,14 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../data/week_archive.dart';
 import '../../domain/reckoning.dart';
 import '../../domain/sealed_value.dart';
+import '../../domain/week_summary.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
 import '../../widgets/sealed_node.dart';
 import 'reckoning_providers.dart';
+import 'week_charts.dart';
 
 /// The Reckoning — the week's verdict, or the seal over it.
 ///
@@ -52,6 +55,12 @@ class _Body extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Null while the week is still sealed — there is nothing to archive about
+    // a week that has not finished.
+    final archived = reckoning.isRevealed
+        ? ref.watch(archivedWeekProvider).valueOrNull
+        : null;
+
     return ListView(
       padding: const EdgeInsets.all(Space.lg),
       children: [
@@ -59,11 +68,113 @@ class _Body extends ConsumerWidget {
         const SizedBox(height: Space.lg),
         _Verdict(reckoning: reckoning),
         const SizedBox(height: Space.lg),
+        if (archived != null) ...[
+          _Account(archived: archived),
+          const SizedBox(height: Space.lg),
+          _Shape(summary: archived.summary),
+          const SizedBox(height: Space.lg),
+          _Spoils(summary: archived.summary),
+          const SizedBox(height: Space.lg),
+        ],
         _Body2(reckoning: reckoning),
         const SizedBox(height: Space.lg),
         _Evidence(reckoning: reckoning),
         const SizedBox(height: Space.huge),
       ],
+    );
+  }
+}
+
+/// The week's written account.
+///
+/// One AI call per week, and the week keeps whatever it got. A week with no
+/// key, no network or no budget left still has every figure — the account is
+/// flavour on top of them.
+class _Account extends StatelessWidget {
+  const _Account({required this.archived});
+
+  final ArchivedWeek archived;
+
+  @override
+  Widget build(BuildContext context) {
+    final narrative = archived.narrative;
+    if (narrative == null) return const SizedBox.shrink();
+
+    return OrnatePanel(
+      title: 'The account',
+      accent: Hue.goldDim,
+      child: Text(narrative, style: Type.lore(size: 14)),
+    );
+  }
+}
+
+/// The shape of the week, drawn.
+class _Shape extends StatelessWidget {
+  const _Shape({required this.summary});
+
+  final WeekSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return OrnatePanel(
+      title: 'The shape of it',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('EACH DAY', style: Type.label(color: Hue.gold)),
+          const SizedBox(height: Space.sm),
+          BalanceChart(balances: summary.dailyBalances),
+          const RunicDivider(),
+          Text('THE SCALE', style: Type.label(color: Hue.gold)),
+          const SizedBox(height: Space.sm),
+          WeightChart(weights: summary.dailyWeights),
+        ],
+      ),
+    );
+  }
+}
+
+/// XP earned, and what earned it.
+class _Spoils extends StatelessWidget {
+  const _Spoils({required this.summary});
+
+  final WeekSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    return OrnatePanel(
+      title: 'Spoils',
+      accent: Hue.gold,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '${summary.xp}',
+                style: Type.numeral(size: 40, color: Hue.gold),
+              ),
+              const SizedBox(width: Space.sm),
+              Text('XP', style: Type.label(color: Hue.gold)),
+            ],
+          ),
+          const SizedBox(height: Space.sm),
+          // Said plainly, because it is the app's position: the score is for
+          // logging honestly and eating well, never for which way the scale
+          // moved.
+          Text(
+            'Earned for ${summary.loggedDays} days logged, '
+            'diet quality of ${summary.averageVitality.round()}, and '
+            '${summary.goalDays} days at your step goal. '
+            'Never for which way the scale went.',
+            textAlign: TextAlign.center,
+            style: Type.lore(size: 12),
+          ),
+        ],
+      ),
     );
   }
 }

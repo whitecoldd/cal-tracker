@@ -71,6 +71,9 @@ void main() {
             const RevealGate(weekEndsOn: DateTime.sunday),
           ),
           weekReckoningProvider.overrideWith((ref) async => reckoning),
+          // Not overridden, this reaches a real database through
+          // path_provider, which a widget test has no plugin for.
+          archivedWeekProvider.overrideWith((ref) async => null),
         ],
         child: MaterialApp(
           theme: AppTheme.build(),

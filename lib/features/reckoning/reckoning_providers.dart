@@ -3,12 +3,17 @@ import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/nutrition_adapter.dart';
+import '../../data/week_archive.dart';
 import '../../domain/day.dart';
 import '../../domain/energy.dart';
+import '../../domain/harm.dart';
 import '../../domain/nutrition.dart';
 import '../../domain/reckoning.dart';
 import '../../domain/reveal_gate.dart';
+import '../../domain/scoring.dart';
+import '../../domain/week_summary.dart';
 import '../../providers/app_providers.dart';
+import '../ai/ai_providers.dart';
 import '../journal/journal_providers.dart';
 
 /// The one gate every verdict passes through.
@@ -130,5 +135,113 @@ final weekReckoningProvider = FutureProvider<Reckoning>((ref) async {
     ageYears:
         profile == null ? null : EnergyModel.ageFromBirthYear(profile.birthYear),
     sex: profile?.sex,
+  );
+});
+
+/// Freezes a week and reads it back.
+final weekArchiveProvider = Provider<WeekArchive>(
+  (ref) => WeekArchive(
+    weeks: ref.watch(databaseProvider).weeksDao,
+    ai: ref.watch(openRouterClientProvider),
+  ),
+);
+
+/// The week's frozen account, sealing it first if it has just closed.
+///
+/// Sealing on open is the only sensible trigger: there is no background job in
+/// a serverless app, so a week closes when the user comes to read it. The
+/// archive is idempotent, so opening the screen twice does not write twice or
+/// spend a second AI call.
+///
+/// Returns null while the week is still sealed — there is nothing to archive
+/// about a week that has not finished.
+final archivedWeekProvider = FutureProvider<ArchivedWeek?>((ref) async {
+  final reckoning = await ref.watch(weekReckoningProvider.future);
+  if (!reckoning.isRevealed) return null;
+
+  final archive = ref.watch(weekArchiveProvider);
+
+  final existing = await archive.read(reckoning.weekStart);
+  if (existing != null) return existing;
+
+  final db = ref.watch(databaseProvider);
+  final gate = ref.watch(revealGateProvider);
+  final profile = ref.watch(profileProvider).valueOrNull;
+  final stepGoal = profile?.dailyStepGoal ?? 10000;
+
+  final days = reckoning.weekStart.weekDays(weekEndsOn: gate.weekEndsOn);
+
+  // --- quality, day by day ---
+  final items = await db.journalDao.forRange(
+    reckoning.weekStart,
+    reckoning.weekEnd,
+  );
+  final byDay = items.groupListsBy((i) => i.entry.day);
+
+  var vitalitySum = 0.0;
+  var toxicitySum = 0.0;
+  var scoredDays = 0;
+
+  final weight = await db.trackingDao.latestWeightOnOrBefore(reckoning.weekEnd);
+
+  for (final day in days) {
+    final dayItems = byDay[day];
+    if (dayItems == null || dayItems.isEmpty) continue;
+
+    final totals = NutrientTotals.of(dayItems.servings);
+    vitalitySum += scoreVitality(totals, bodyMassKg: weight?.kg).score;
+    toxicitySum += readToxins(totals).load;
+    scoredDays++;
+  }
+
+  // --- movement ---
+  final activity = await db.trackingDao.activityInRange(
+    reckoning.weekStart,
+    reckoning.weekEnd,
+  );
+  final steps = activity.fold<int>(0, (sum, a) => sum + a.steps);
+  final goalDays = activity.where((a) => a.steps >= stepGoal).length;
+
+  // --- weigh-ins for the chart ---
+  final weights = await db.trackingDao.weightsInRange(
+    reckoning.weekStart,
+    reckoning.weekEnd,
+  );
+
+  final averageVitality = scoredDays == 0 ? 0.0 : vitalitySum / scoredDays;
+
+  final xp = awardXp(
+    loggedDays: reckoning.loggedDays,
+    averageVitality: averageVitality,
+    goalDays: goalDays,
+  );
+
+  final summary = WeekSummary(
+    loggedDays: reckoning.loggedDays,
+    energyBalanceKcal: reckoning.energyBalanceKcal.valueOrNull ?? 0,
+    averageDailyBalanceKcal:
+        reckoning.averageDailyBalanceKcal.valueOrNull ?? 0,
+    projectedChangeKg: reckoning.projectedChangeKg.valueOrNull ?? 0,
+    averageVitality: averageVitality,
+    averageToxicity: scoredDays == 0 ? 0 : toxicitySum / scoredDays,
+    steps: steps,
+    goalDays: goalDays,
+    xp: xp.total,
+    weightDeltaKg: reckoning.weightDeltaKg.valueOrNull,
+    trend: reckoning.trend.valueOrNull,
+    bodyFatPercent: reckoning.bodyFatPercent.valueOrNull,
+    dailyBalances: reckoning.dailyBalances.valueOrNull ?? const [],
+    dailyWeights: [for (final w in weights) w.kg],
+  );
+
+  return archive.seal(
+    reckoning: reckoning,
+    summary: summary,
+    // Cannot be built from a sealed week — see NarrativeFacts.
+    facts: NarrativeFacts.from(
+      reckoning,
+      averageVitality: averageVitality,
+      steps: steps,
+    ),
   );
 });

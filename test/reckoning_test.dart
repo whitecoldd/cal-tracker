@@ -65,6 +65,7 @@ List<SealedValue<Object?>> _verdicts(Reckoning r) => [
       r.trend,
       r.projectedChangeKg,
       r.bodyFatPercent,
+      r.dailyBalances,
     ];
 
 void main() {
@@ -208,6 +209,21 @@ void main() {
       expect(
         (reckoning.projectedChangeKg as Revealed<double>).value,
         closeTo(-3500 / 7700, 0.0001),
+      );
+    });
+
+    test('the week shape is a list of each logged day balance', () {
+      final reckoning = _reckonOn(_sunday);
+
+      // Plotted by the reveal chart. Sealed with the rest, because drawing
+      // the verdict as a picture is no better than printing it.
+      expect(
+        (reckoning.dailyBalances as Revealed<List<double>>).value,
+        hasLength(7),
+      );
+      expect(
+        (reckoning.dailyBalances as Revealed<List<double>>).value.first,
+        closeTo(-500, 0.001),
       );
     });
 

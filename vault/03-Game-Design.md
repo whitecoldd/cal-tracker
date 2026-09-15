@@ -69,6 +69,17 @@ steps-against-goal cannot be solved back into a deficit. Active energy, which
 
 **Adrenaline** — logging-streak multiplier applied to XP.
 
+**XP** — awarded at the reveal, and **for behaviour, never outcome** (T11):
+days logged, diet quality, days at the step goal. Nothing reads which way the
+scale went.
+
+Two reasons, and the second is load-bearing. Paying for weight lost would pay
+for a number that moves on water and gut contents, and would punish an honest
+week that went sideways. And XP that depended on weight would be a *verdict in
+disguise* — it could not appear on a daily screen without leaking the answer,
+and a score seen once a week is a far weaker motivator. The reveal says so out
+loud: *"Never for which way the scale went."*
+
 ### Signs
 
 Five buffs, each tied to a real behaviour:

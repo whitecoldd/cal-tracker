@@ -809,3 +809,80 @@ mattered here more than usual.
 **Not done here:** the five Signs as a screen. `aardCharge` is computed and
 tested, but Igni, Quen, Axii and Yrden need the rest of the scoring and a
 character sheet to live on — that is T12a.
+
+---
+
+## T11 — Week's End
+**Date:** 2026-09-15
+
+The reveal, built on T7's gate: the written account, the charts, XP, and the
+week archive. All four permitted AI uses are now live. 30 new tests, 591 in
+total.
+
+**`NarrativeFacts` makes the one exception unwriteable.** The weekly narrative
+is the only call permitted verdict data (CLAUDE.md §1), and it must run only on
+the reveal day. Rather than rely on the call site remembering, the narrative
+function takes a type that **cannot be constructed from a sealed week** —
+`NarrativeFacts.from` returns null unless the reckoning is revealed, and
+`weeklyNarrative` takes nothing else. There is no way to write code that asks a
+model to describe a week still in progress.
+
+The same shape as the gate's callback in T7: the guard is that the wrong thing
+has no syntax, not that a comment forbids it.
+
+**A sealed week is never recomputed.** Once written, the summary is frozen —
+later changes to the scoring maths must not rewrite what the user was already
+told. A history that edits itself is not a history. There is a test that seals
+a week, seals it again with deliberately different figures, and asserts the
+first ones survive.
+
+**The narrative costs exactly one call, once.** Not on a re-open, not after a
+restart, and — the case worth testing — **not after a failure**. A week that
+failed to get an account keeps its null rather than retrying on every visit,
+because a retry per visit is exactly how a fifty-a-day budget disappears.
+
+**A failed narrative never blocks the seal.** No key, no network, no budget: the
+week still freezes with every figure it has. The account is flavour on top of
+the numbers, and refusing to seal because a model was unreachable would lose
+the numbers to save the prose.
+
+**Sealing happens when the screen opens.** There is no background job in a
+serverless app, so a week closes when the user comes to read it. The archive is
+idempotent, which is what makes that safe.
+
+**XP rewards behaviour, never outcome.** Days logged, diet quality, days at the
+step goal — nothing reads which way the scale went. Two reasons, and the second
+is load-bearing: paying for weight lost would pay for a number that moves on
+water, and would punish an honest week that went sideways; and XP that depended
+on weight would be a verdict in disguise, unable to appear on a daily screen
+without leaking the answer. The reveal says this out loud — *"Never for which
+way the scale went."*
+
+**`Reckoning` gained `dailyBalances`, sealed like the rest.** My first pass had
+the chart plot the weekly average for every day, which would have drawn a
+perfectly flat week — a lie in picture form. The per-day figures now come from
+the reckoning itself and are sealed with everything else, because drawing the
+verdict as a chart is no better than printing it. Adding the field made
+`reckoning_test.dart`'s verdict list refuse to compile until it was covered,
+which is exactly what that list is for.
+
+> [!note] The fake adapter moved to `test/support/`
+> T8's `openrouter_client_test.dart` had it inline, and T11 needed the same
+> thing. It is the only description in the repo of what the OpenRouter wire
+> looks like, and two copies would drift apart. Same argument as extracting
+> `MealConfirm` in T9.
+
+Two test files needed `archivedWeekProvider` overridden once the reveal screen
+started watching it — unoverridden it reaches a real `AppDatabase` through
+`path_provider` and throws `MissingPluginException`. The same class of breakage
+as T10's activity panel: **giving an existing screen a new provider breaks that
+screen's tests**, and it is worth checking the callers every time.
+
+**Verified:** `flutter analyze` clean, 591 tests green, goldens regenerated and
+inspected — the revealed week now shows the account, both charts and the XP
+panel, and the sealed one is unchanged. `flutter build apk --debug` succeeds.
+
+**Not done here:** the level-up animation from the plan. XP is awarded, frozen
+and shown, but levels are a character-sheet concept and the curve belongs with
+the rest of progression in T12a. Animating a level-up before there are levels
+would have been a placeholder.
