@@ -17,6 +17,9 @@ List<String> _dailyPrompts() => [
         gramsPerPiece: 1.2,
         pieceName: 'almond',
       ),
+      Prompts.photoSystem(),
+      Prompts.photoUser(null),
+      Prompts.photoUser('the sauce is tahini'),
     ];
 
 void main() {
@@ -122,6 +125,39 @@ void main() {
       // A target for next week would be the app setting a goal from a verdict,
       // which is the daily screens' problem arriving a week later.
       expect(narrative, contains('do not suggest a target'));
+    });
+  });
+
+  group('the photograph prompt', () {
+    test('tells the model to name only what it can see', () {
+      // The failure mode that matters: a model that infers a side dish out of
+      // frame adds food nobody ate to the day's total.
+      final system = Prompts.photoSystem().toLowerCase();
+
+      expect(system, contains('only what you can actually see'));
+      // Line breaks in the prompt are incidental, so match on words rather
+      // than on how the source happens to wrap.
+      expect(system.replaceAll(RegExp(r'\s+'), ' '), contains('out of frame'));
+    });
+
+    test('asks for the unidentifiable rather than a guess', () {
+      expect(
+        Prompts.photoSystem(),
+        contains('cannot identify into "unrecognised"'),
+      );
+    });
+
+    test('handles a picture that is not food', () {
+      expect(Prompts.photoSystem(), contains('not of food, return no items'));
+    });
+
+    test('passes the user note through when there is one', () {
+      expect(
+        Prompts.photoUser('the sauce is tahini'),
+        contains('the sauce is tahini'),
+      );
+      expect(Prompts.photoUser(null), isNot(contains('adds:')));
+      expect(Prompts.photoUser('  '), isNot(contains('adds:')));
     });
   });
 

@@ -445,6 +445,121 @@ void main() {
     });
   });
 
+  group('reading a photograph', () {
+    const dataUri = 'data:image/jpeg;base64,AAAA';
+
+    test('sends the image beside the instruction', () async {
+      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+
+      final meal = await built.client.parsePhoto(imageDataUri: dataUri);
+
+      expect(meal.items.single.food.name, 'Egg, whole');
+
+      final messages =
+          built.adapter.requests.single['messages'] as List<dynamic>;
+      final parts = (messages.last as Map)['content'] as List<dynamic>;
+
+      expect(parts, hasLength(2));
+      expect((parts.first as Map)['type'], 'text');
+      expect((parts.last as Map)['type'], 'image_url');
+      expect(
+        ((parts.last as Map)['image_url'] as Map)['url'],
+        dataUri,
+      );
+    });
+
+    test('is one request, however many foods are on the plate', () async {
+      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+
+      await built.client.parsePhoto(imageDataUri: dataUri);
+
+      expect(built.adapter.callCount, 1);
+      expect(await db.aiCallsDao.usedToday(), 1);
+    });
+
+    test('carries the user note when there is one', () async {
+      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+
+      await built.client.parsePhoto(
+        imageDataUri: dataUri,
+        note: 'the sauce is tahini',
+      );
+
+      final messages =
+          built.adapter.requests.single['messages'] as List<dynamic>;
+      final parts = (messages.last as Map)['content'] as List<dynamic>;
+
+      // The user's own hint is usually worth more than anything the model can
+      // infer from the pixels.
+      expect((parts.first as Map)['text'], contains('tahini'));
+    });
+
+    test('omits the note when it is blank', () async {
+      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+
+      await built.client.parsePhoto(imageDataUri: dataUri, note: '   ');
+
+      final messages =
+          built.adapter.requests.single['messages'] as List<dynamic>;
+      final parts = (messages.last as Map)['content'] as List<dynamic>;
+
+      expect((parts.first as Map)['text'], isNot(contains('adds:')));
+    });
+
+    test('shares the schema and the chain with the typed path', () async {
+      final built = build(replies: [
+        const _Reply.status(500),
+        _Reply.ok(_reply(_mealPayload)),
+      ]);
+
+      await built.client.parsePhoto(imageDataUri: dataUri);
+
+      final format = built.adapter.requests.first['response_format']
+          as Map<String, dynamic>;
+      expect(
+        (format['json_schema'] as Map<String, dynamic>)['name'],
+        'parsed_meal',
+      );
+      expect(built.adapter.modelsTried, [
+        OpenRouterClient.defaultModels[0],
+        OpenRouterClient.defaultModels[1],
+      ]);
+    });
+
+    test('is attributed to the photo purpose', () async {
+      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+
+      await built.client.parsePhoto(imageDataUri: dataUri);
+
+      final calls = await db.aiCallsDao.select(db.aiCalls).get();
+      expect(calls.single.purpose, AiPurpose.parsePhoto);
+    });
+
+    test('refuses without a key, before the image is sent anywhere', () async {
+      final built = build(replies: [], key: null);
+
+      await expectLater(
+        built.client.parsePhoto(imageDataUri: dataUri),
+        throwsA(isA<AiNoKey>()),
+      );
+      expect(built.adapter.callCount, 0);
+    });
+
+    test('carries no verdict data', () async {
+      final built = build(replies: [_Reply.ok(_reply(_mealPayload))]);
+
+      await built.client.parsePhoto(
+        imageDataUri: dataUri,
+        note: 'leftovers',
+      );
+
+      final wire = jsonEncode(built.adapter.requests).toLowerCase();
+      for (final leak in const ['tdee', 'deficit', 'surplus', 'bmr']) {
+        expect(wire.contains(leak), isFalse, reason: 'leaked "$leak"');
+      }
+    });
+  });
+
   group('portion estimation', () {
     test('decodes an estimate', () async {
       final built = build(replies: [_Reply.ok(_reply(_portionPayload))]);

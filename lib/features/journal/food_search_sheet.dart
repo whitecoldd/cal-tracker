@@ -21,6 +21,7 @@ import '../ai/ai_providers.dart';
 import 'barcode_scanner_screen.dart';
 import 'food_lookup_providers.dart';
 import 'journal_providers.dart';
+import 'photo_meal_sheet.dart';
 import 'portion_sheet.dart';
 import 'speak_meal_sheet.dart';
 
@@ -124,6 +125,16 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
     if (logged && mounted) Navigator.of(context).pop();
   }
 
+  /// Hands off to the photo sheet, closing this one if it logged anything.
+  Future<void> _photograph() async {
+    final logged = await PhotoMealSheet.show(
+      context,
+      day: widget.day,
+      slot: widget.slot,
+    );
+    if (logged && mounted) Navigator.of(context).pop();
+  }
+
   Future<void> _scan() async {
     final code = await BarcodeScannerScreen.scan(context);
     if (code == null || !mounted) return;
@@ -213,7 +224,7 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                       // Offered only when a key exists. A button that always
                       // fails is worse than no button, and the app is fully
                       // usable without one.
-                      if (ref.watch(aiAvailableProvider).valueOrNull ?? false)
+                      if (ref.watch(aiAvailableProvider).valueOrNull ?? false) ...[
                         IconButton(
                           onPressed: _busy ? null : _speak,
                           tooltip: 'Describe the meal',
@@ -221,6 +232,14 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                           color: Hue.gold,
                           disabledColor: Hue.parchmentFaint,
                         ),
+                        IconButton(
+                          onPressed: _busy ? null : _photograph,
+                          tooltip: 'Photograph the meal',
+                          icon: const Icon(Icons.photo_camera_outlined),
+                          color: Hue.gold,
+                          disabledColor: Hue.parchmentFaint,
+                        ),
+                      ],
                     ],
                   ),
                 ),

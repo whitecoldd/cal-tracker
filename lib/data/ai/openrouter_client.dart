@@ -109,6 +109,31 @@ class OpenRouterClient {
     return AiDecode.meal(json);
   }
 
+  /// Reads a photograph of a meal into items.
+  ///
+  /// Shares everything with [parseMeal] but the content type: the same schema,
+  /// the same chain, the same budget. A photograph is one request however many
+  /// foods are on the plate.
+  Future<ParsedMeal> parsePhoto({
+    required String imageDataUri,
+    String? note,
+  }) async {
+    final json = await _structured(
+      purpose: AiPurpose.parsePhoto,
+      system: Prompts.photoSystem(),
+      user: [
+        {'type': 'text', 'text': Prompts.photoUser(note)},
+        {
+          'type': 'image_url',
+          'image_url': {'url': imageDataUri},
+        },
+      ],
+      schema: AiSchemas.meal,
+    );
+
+    return AiDecode.meal(json);
+  }
+
   /// Estimates what a vague portion weighs.
   ///
   /// Given the food and the user's own phrasing and nothing else — the answer
@@ -137,10 +162,15 @@ class OpenRouterClient {
   }
 
   /// One request, walking the model chain until one answers.
+  ///
+  /// [user] is either a plain string or the OpenAI-style list of content
+  /// parts that a vision request needs. Both go into the same envelope, so the
+  /// chain, the budget and the recording are shared rather than duplicated for
+  /// photographs.
   Future<Map<String, dynamic>> _structured({
     required AiPurpose purpose,
     required String system,
-    required String user,
+    required Object user,
     required Map<String, dynamic> schema,
   }) async {
     final key = await _keys.read();
@@ -192,7 +222,7 @@ class OpenRouterClient {
     required String key,
     required String model,
     required String system,
-    required String user,
+    required Object user,
     required Map<String, dynamic> schema,
     required AiPurpose purpose,
   }) async {

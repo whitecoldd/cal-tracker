@@ -47,6 +47,30 @@ Task: split a line of everyday text into the foods it names.
   /// The user's line, as the model sees it.
   static String mealParsingUser(String text) => 'Meal: $text';
 
+  /// System prompt for reading a photograph of a meal.
+  static String photoSystem() => '''
+$_house
+
+Task: list the foods visible in a photograph of a meal.
+- Name only what you can actually see. Do not infer a side dish that is out
+  of frame or guess at a sauce you cannot identify.
+- Estimate portions from the plate and the usual size of what is on it.
+  Lower the confidence when the angle hides depth.
+- Put anything you can see but cannot identify into "unrecognised",
+  described in plain words such as "a brown sauce".
+- If the picture is not of food, return no items.''';
+
+  /// The instruction sent alongside the image.
+  static String photoUser(String? note) {
+    if (note == null || note.trim().isEmpty) {
+      return 'List the foods in this photograph.';
+    }
+    // The user's own hint, which is usually worth more than anything the model
+    // can infer from the pixels.
+    return 'List the foods in this photograph. '
+        'The person who ate it adds: ${note.trim()}';
+  }
+
   /// System prompt for estimating what a vague portion weighs.
   static String portionSystem() => '''
 $_house

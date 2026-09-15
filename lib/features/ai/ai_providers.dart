@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../data/ai/ai_key_store.dart';
+import '../../data/ai/image_prep.dart';
 import '../../data/ai/meal_resolver.dart';
 import '../../data/ai/openrouter_client.dart';
 import '../../data/daos/ai_calls_dao.dart';
@@ -15,6 +17,12 @@ final openRouterClientProvider = Provider<OpenRouterClient>(
     calls: ref.watch(databaseProvider).aiCallsDao,
   ),
 );
+
+/// The camera and gallery. Overridden in tests, which have neither.
+final imagePickerProvider = Provider<ImagePicker>((ref) => ImagePicker());
+
+/// Shrinks a photograph and strips its metadata before it is sent.
+final imagePrepProvider = Provider<ImagePrep>((ref) => const ImagePrep());
 
 final mealResolverProvider = Provider<MealResolver>(
   (ref) => MealResolver(ref.watch(databaseProvider).foodsDao),

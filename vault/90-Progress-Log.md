@@ -681,3 +681,63 @@ call would need a real key and would spend one of fifty daily requests per run.
 **Not done here:** photo→items (T9) and the weekly narrative (T11), the other
 two permitted uses. The prompt and schema for the narrative are written, since
 they belong with their siblings, but nothing calls them yet.
+
+---
+
+## T9 — Vision
+**Date:** 2026-09-15
+
+Photograph a plate, get items. Three of the four permitted AI uses are now
+live; only the weekly narrative is left. 22 new tests, 515 in total. Detail in
+[[05-AI-Layer]].
+
+**It reuses T8 almost entirely.** `parsePhoto` differs from `parseMeal` only in
+the shape of the message content — a list of text and image parts rather than a
+string — so the model chain, the budget check, the recording, the schema and
+the write-back are all shared rather than written twice. The one change to the
+client was widening `user` from `String` to `Object`.
+
+A photograph is **one request however many foods are on the plate**, the same
+bargain that makes the typed path affordable at fifty a day.
+
+**The picture is shrunk to a 1024 px long edge at quality 70.** A phone camera
+produces twelve megapixels and 3–4 MB; a vision model charges for that by the
+tile. A plate of food is not a document, so nothing is lost — a real meal lands
+around 100–200 KB.
+
+> [!warning] `keepExif: false` is a privacy decision, not an inherited default
+> It happens to be the plugin's default, and it is set explicitly anyway. A
+> camera photo carries EXIF and EXIF carries GPS. This app keeps everything on
+> the device; sending the location of the user's kitchen to a third party along
+> with a picture of dinner would quietly undo that. Written out with the reason
+> so nobody later removes it as redundant.
+
+The size cap is enforced **after** compression rather than before, so a
+compressor that misbehaves cannot push a huge upload through. There is a test
+for that specifically — it was the one thing about the ordering that was easy
+to get backwards.
+
+**The prompt guards against invented food, not misidentified food.** Getting a
+food wrong is visible and correctable at the confirm step. *Inventing* one is
+not: a model that infers a side dish out of frame adds a plausible extra line
+that the user is unlikely to question. So the prompt says to name only what is
+visible, to put anything seen-but-unidentifiable into `unrecognised` in plain
+words, and to return no items at all if the picture is not food.
+
+**`MealConfirm` was extracted rather than copied.** The typed sheet had it
+inline; the photo sheet needed the same thing. It is the only step standing
+between a model's mistake and the day's totals, and two copies would
+eventually disagree about what they show.
+
+The photo prompts go through the same blackout scrape as every other daily
+prompt — no `tdee`, `deficit`, `bmr`, not even `kg` — and the same
+wire-level assertion on the serialised request.
+
+**Verified:** `flutter analyze` clean, 515 tests green, `flutter build apk
+--debug` succeeds — the first task to actually use `image_picker`, and this
+project has a history of plugins that resolve but do not build.
+
+**Not done here:** no golden for either AI sheet. Both render a network state
+behind a permission-gated picker, and a golden that needs a stubbed async
+frame plus a fake camera is a flaky test wearing a useful disguise. The
+Settings golden covers the one AI surface that is purely local.

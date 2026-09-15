@@ -69,8 +69,9 @@ lib/features/journal/
   speak_meal_sheet.dart  type a meal, confirm, log
 ```
 
-Two of the four permitted uses are live: **free-text meal parsing** and
-**vague-portion estimation**. Photo→items is T9; the weekly narrative is T11.
+Two of the four permitted uses landed here: **free-text meal parsing** and
+**vague-portion estimation**. Photo→items followed in T9 (below); the weekly
+narrative is T11.
 
 ### The prompts are pure functions
 
@@ -149,6 +150,58 @@ is a test asserting the key does not appear in the widget tree.
 Validation is a **shape check** (`sk-or-` and a plausible length), not a
 network check: verifying against OpenRouter would spend one of fifty daily
 requests to learn what a prefix reveals.
+
+## Vision (T9)
+
+```
+lib/data/ai/image_prep.dart           policy, compression, data URI
+lib/features/journal/photo_meal_sheet.dart
+lib/features/journal/meal_confirm.dart  shared by the typed and photo paths
+```
+
+Three of the four permitted uses are now live. Only the weekly narrative is
+left, and it belongs with [[02-Architecture]]'s reveal machinery in T11.
+
+**A photograph is one request, however many foods are on the plate** — the
+same bargain as the typed path, and the same schema, chain, budget and
+recording. `parsePhoto` differs from `parseMeal` only in the shape of the
+message content: a list of `{type: text}` and `{type: image_url}` parts rather
+than a string.
+
+### The picture is shrunk, and stripped
+
+| Setting | Value | Why |
+|---|---|---|
+| Long edge | 1024 px | Above what a model resolves a meal at, far below what a camera produces |
+| Quality | 70 | Food survives it; text would not |
+| Hard cap | 1500 KB | A backstop — a real meal lands at 100–200 KB |
+
+> [!warning] `keepExif: false` is a privacy decision, not an inherited default
+> A camera photo carries EXIF, and EXIF carries GPS. This app keeps everything
+> on the device; sending the location of the user's kitchen to a third party
+> along with a picture of dinner would quietly undo that. Re-encoding drops it,
+> and the flag is set explicitly so nobody later "tidies it away" as redundant.
+
+The cap is enforced **after** compression, so a compressor that misbehaves
+cannot push a huge upload through. There is a test for exactly that.
+
+`image_picker` also does a first pass at 2048 px before the real compression —
+cheaper than handing twelve megapixels to a platform channel.
+
+### The prompt guards against invented food
+
+The failure mode that matters is not misidentifying a food; it is *inventing*
+one. A model that infers a side dish out of frame adds food nobody ate to the
+day's total, and the user is unlikely to notice a plausible extra line. So the
+prompt says to name only what is actually visible, to put anything seen but
+unidentifiable into `unrecognised` in plain words, and to return no items at
+all if the picture is not of food.
+
+### The confirm step is shared, not copied
+
+`MealConfirm` serves both sheets. It is the only thing standing between a
+model's mistake and the day's totals, and two copies of it would eventually
+disagree about what they show.
 
 ## The four permitted uses
 
