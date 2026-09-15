@@ -59,7 +59,13 @@ saturates the meter alone and hides everything else; without allowing severity
 past 1.0 at all, three times the sodium guideline would read the same as
 reaching it.
 
-**Stamina** — activity against goal, from steps and distance.
+**Stamina** — steps against the user's own step goal, as a percentage (T10).
+
+Safe on the daily side because a step goal is **not** a verdict target: it is
+chosen in character creation and has nothing to do with energy balance, so
+steps-against-goal cannot be solved back into a deficit. Active energy, which
+*can*, is stored but never rendered — see the movement section of
+[[02-Architecture]].
 
 **Adrenaline** — logging-streak multiplier applied to XP.
 

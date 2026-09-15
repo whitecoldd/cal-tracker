@@ -1,8 +1,10 @@
 import 'package:cal_tracker/data/database.dart';
 import 'package:cal_tracker/data/nutrition_adapter.dart';
 import 'package:cal_tracker/data/tables.dart';
+import 'package:cal_tracker/domain/activity.dart';
 import 'package:cal_tracker/domain/day.dart';
 import 'package:cal_tracker/domain/portion.dart';
+import 'package:cal_tracker/features/activity/activity_providers.dart';
 import 'package:cal_tracker/features/journal/journal_providers.dart';
 import 'package:cal_tracker/features/journal/journal_screen.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
@@ -294,6 +296,10 @@ void main() {
           overrides: [
             databaseProvider.overrideWithValue(db),
             journalEntriesProvider.overrideWith((ref) => Stream.value(items)),
+            // The activity panel reads the database; a widget test's fake
+            // async never lets that query finish. See CLAUDE.md §2.
+            dayActivityProvider.overrideWith((ref) async => ActivityView.empty),
+            dayActivityIsManualProvider.overrideWith((ref) async => false),
           ],
           child: MaterialApp(
             theme: AppTheme.build(),

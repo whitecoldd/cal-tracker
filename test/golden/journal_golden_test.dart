@@ -4,8 +4,10 @@ library;
 import 'package:cal_tracker/data/daos/journal_dao.dart';
 import 'package:cal_tracker/data/database.dart';
 import 'package:cal_tracker/data/tables.dart';
+import 'package:cal_tracker/domain/activity.dart';
 import 'package:cal_tracker/domain/day.dart';
 import 'package:cal_tracker/domain/portion.dart';
+import 'package:cal_tracker/features/activity/activity_providers.dart';
 import 'package:cal_tracker/features/journal/journal_providers.dart';
 import 'package:cal_tracker/features/journal/journal_screen.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
@@ -112,6 +114,17 @@ void main() {
             databaseProvider.overrideWithValue(db),
             journalEntriesProvider
                 .overrideWith((ref) => Stream.value(items as List<LoggedItem>)),
+            // A settled day of movement, so the golden shows the panel with
+            // real figures rather than its loading box.
+            dayActivityProvider.overrideWith(
+              (ref) async => const ActivityView(
+                steps: 8240,
+                distanceM: 6100,
+                stepGoal: 10000,
+                stamina: 82.4,
+              ),
+            ),
+            dayActivityIsManualProvider.overrideWith((ref) async => false),
           ],
           child: MaterialApp(
             debugShowCheckedModeBanner: false,

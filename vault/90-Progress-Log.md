@@ -741,3 +741,71 @@ project has a history of plugins that resolve but do not build.
 behind a permission-gated picker, and a golden that needs a stubbed async
 frame plus a fake camera is a flaky test wearing a useful disguise. The
 Settings golden covers the one AI surface that is purely local.
+
+---
+
+## T10 — Health Connect
+**Date:** 2026-09-15
+
+Steps and distance from Health Connect, the permission flow, the manual
+override, and Stamina and Aard wired to real movement. 46 new tests, 561 in
+total.
+
+**The interesting half of this task is what the screen is *not* given.**
+
+Steps, distance and Stamina are always-visible — they say how much the user
+moved, which is an input like any other. Active energy is not: it is a term in
+expenditure, and intake beside expenditure is the verdict. A panel reading
+"8,240 steps · 437 kcal burned" next to the day's 1,275 kcal eaten hands the
+user a subtraction.
+
+So the stored row carries `activeKcal` — the weekly reckoning needs it — and
+the UI is handed an `ActivityView`, which **has nowhere to put it**. The same
+trick as `SealedValue`, one layer up: a widget cannot render what it was never
+given, and adding the field would mean editing `activity.dart` with the comment
+explaining why not sitting right there. There is a test that stores 437 kcal,
+renders the panel, and asserts the number never appears.
+
+**A manual entry always wins over a later sync.** The user typed a figure
+precisely because the counter was wrong — a phone left on a desk, a walk with
+the phone in a bag. A sync that overwrote it would make the override useless.
+The DAO already enforced this from T2; `ActivitySync` decides it again above
+the DAO so the result can say *why* a day was skipped rather than silently
+reporting a write.
+
+**A day the device never saw is left absent, not written as zero.** A zero
+claims the user did not move; an absent day says the device did not see it.
+Those are different, and the week's reckoning treats them differently.
+
+**The sync re-reads a week every time.** Health Connect back-fills — a phone
+that was off, a watch that synced late — so a day already past can gain steps.
+Re-reading seven days costs one query and catches all of it.
+
+**Intervals are attributed to the day they started.** A walk crossing midnight
+is rare and splitting it proportionally would be more correct and less
+predictable; the user reads these numbers against a calendar day they remember.
+Written down because it is a judgement rather than an obvious default.
+
+**T7's reckoning needed no changes at all.** It already read `activity_days`
+and preferred measured movement over the self-described activity level; T10
+simply put real rows there. The weekly expenditure is now measured rather than
+guessed, without a line changing in `reckon`.
+
+> [!note] I broke T4's tests, and it was the fake-async trap again
+> Adding `ActivityPanel` to the Journal gave that screen a provider that awaits
+> a drift query — so every Journal widget test hung for its full ten-minute
+> timeout. Nine minutes of nothing before the suite gave up.
+>
+> The lesson is narrower than "use runAsync": **adding a database-reading
+> widget to an existing screen breaks every test of that screen**, and it fails
+> as a hang rather than as an error. Worth checking the callers whenever a
+> panel gains a provider. Same fix as always — hand it a settled value.
+
+**Verified:** `flutter analyze` clean, 561 tests green, goldens regenerated and
+inspected, `flutter build apk --debug` succeeds. The `health` plugin is the one
+that needed `FlutterFragmentActivity` back in T0, so a real Android build
+mattered here more than usual.
+
+**Not done here:** the five Signs as a screen. `aardCharge` is computed and
+tested, but Igni, Quen, Axii and Yrden need the rest of the scoring and a
+character sheet to live on — that is T12a.

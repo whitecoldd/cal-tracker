@@ -10,6 +10,7 @@ import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
+import '../activity/activity_panel.dart';
 import '../alchemy/alchemy_screen.dart';
 import '../reckoning/reckoning_screen.dart';
 import '../settings/settings_screen.dart';
@@ -177,6 +178,8 @@ class _Body extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(Space.lg, 0, Space.lg, 96),
       children: [
         _TotalsPanel(totals: totals),
+        const SizedBox(height: Space.md),
+        const ActivityPanel(),
         const SizedBox(height: Space.lg),
         if (day.isEmpty)
           const _EmptyDay()

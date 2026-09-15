@@ -3,15 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/ai/ai_key_store.dart';
 import '../../data/daos/ai_calls_dao.dart';
+import '../../data/health/activity_sync.dart';
+import '../../data/health/step_reader.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
 import '../../widgets/stat_bar.dart';
 import '../../widgets/witcher_button.dart';
+import '../activity/activity_providers.dart';
 import '../ai/ai_providers.dart';
 
-/// Settings — for now, the AI key and what is left of today's budget.
+/// Settings — the AI key, the daily allowance, and Health Connect.
 ///
 /// The key is typed here and nowhere else. It goes straight into the Android
 /// keystore: never into the repo, never into a `--dart-define`, which would
@@ -94,7 +97,123 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         ),
         const SizedBox(height: Space.lg),
         _Budget(budget: budget),
+        const SizedBox(height: Space.lg),
+        const _Health(),
       ],
+    );
+  }
+}
+
+/// Health Connect: whether it is reachable, and the way in.
+///
+/// Permission is requested by the `health` plugin itself — there is no
+/// `permission_handler` in this project, and `MainActivity` extends
+/// `FlutterFragmentActivity` so the plugin can run its permission contract.
+/// See CLAUDE.md §3.
+class _Health extends ConsumerStatefulWidget {
+  const _Health();
+
+  @override
+  ConsumerState<_Health> createState() => _HealthState();
+}
+
+class _HealthState extends ConsumerState<_Health> {
+  bool _working = false;
+  String? _outcome;
+
+  Future<void> _connect() async {
+    setState(() {
+      _working = true;
+      _outcome = null;
+    });
+
+    final result = await ref.read(activitySyncProvider).connect();
+    ref.read(activityTickProvider.notifier).changed();
+
+    if (!mounted) return;
+    setState(() {
+      _working = false;
+      _outcome = switch (result) {
+        SyncResult(availability: HealthAvailability.notInstalled) =>
+          'Health Connect is not installed on this phone.',
+        SyncResult(availability: HealthAvailability.needsUpdate) =>
+          'Health Connect needs updating before it can be read.',
+        SyncResult(availability: HealthAvailability.unsupported) =>
+          'This device cannot read movement data.',
+        SyncResult(granted: false) =>
+          'Permission was not given. Steps can still be entered by hand.',
+        SyncResult(:final daysWritten, :final daysKept) =>
+          'Read $daysWritten ${daysWritten == 1 ? "day" : "days"}'
+              '${daysKept > 0 ? ", left $daysKept you had typed" : ""}.',
+      };
+    });
+  }
+
+  Future<void> _install() async {
+    await ref.read(stepReaderProvider).promptInstall();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final availability = ref.watch(healthAvailabilityProvider).valueOrNull;
+    final permitted = ref.watch(healthPermissionProvider).valueOrNull ?? false;
+
+    return OrnatePanel(
+      title: 'The Path walked',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Health Connect supplies steps and distance, including for days '
+            'the app was never opened. Without it, steps can be typed in the '
+            'Journal.',
+            style: Type.lore(size: 12),
+          ),
+          const SizedBox(height: Space.md),
+          if (availability == HealthAvailability.notInstalled) ...[
+            Text(
+              'Health Connect is not installed.',
+              style: Type.prose(size: 13, color: Hue.adrenaline),
+            ),
+            const SizedBox(height: Space.sm),
+            WitcherButton(
+              label: 'Install Health Connect',
+              onPressed: _working ? null : _install,
+            ),
+          ] else if (permitted) ...[
+            Row(
+              children: [
+                const Icon(Icons.check, size: 16, color: Hue.toxicity),
+                const SizedBox(width: Space.sm),
+                Expanded(
+                  child: Text('Connected.', style: Type.prose(size: 14)),
+                ),
+              ],
+            ),
+            const SizedBox(height: Space.md),
+            WitcherButton(
+              label: _working ? 'Reading…' : 'Read the last week',
+              onPressed: _working ? null : _connect,
+            ),
+          ] else
+            WitcherButton(
+              label: _working ? 'Asking…' : 'Connect Health Connect',
+              tone: ButtonTone.primary,
+              onPressed: _working ? null : _connect,
+            ),
+          if (_outcome != null) ...[
+            const SizedBox(height: Space.sm),
+            Text(_outcome!, style: Type.lore(size: 12)),
+          ],
+          const SizedBox(height: Space.sm),
+          // The app reads movement and never writes any. Worth saying on the
+          // screen that asks for the permission.
+          Text(
+            'Read only. Nothing is ever written back to Health Connect.',
+            style: Type.lore(size: 11, color: Hue.parchmentFaint),
+          ),
+        ],
+      ),
     );
   }
 }

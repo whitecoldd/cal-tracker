@@ -3,7 +3,9 @@ library;
 
 import 'package:cal_tracker/data/ai/ai_key_store.dart';
 import 'package:cal_tracker/data/database.dart';
+import 'package:cal_tracker/data/health/step_reader.dart';
 import 'package:cal_tracker/data/tables.dart';
+import 'package:cal_tracker/features/activity/activity_providers.dart';
 import 'package:cal_tracker/features/ai/ai_providers.dart';
 import 'package:cal_tracker/features/settings/settings_screen.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
@@ -56,6 +58,11 @@ void main() {
           ),
           aiAvailableProvider.overrideWith((ref) async => hasKey),
           aiBudgetProvider.overrideWith((ref) async => budget!),
+          // The health section talks to a platform channel that no test can
+          // run. Handed in settled. See CLAUDE.md §2 and §3.
+          healthAvailabilityProvider
+              .overrideWith((ref) async => HealthAvailability.ready),
+          healthPermissionProvider.overrideWith((ref) async => false),
         ],
         child: MaterialApp(
           debugShowCheckedModeBanner: false,

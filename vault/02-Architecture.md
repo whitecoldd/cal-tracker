@@ -303,6 +303,62 @@ Camera permission is requested by the plugin itself — there is no
 `permission_handler` here (see below) — so a denial arrives as a
 `MobileScannerException`, handled in the scanner's `errorBuilder`.
 
+## Movement (T10)
+
+```
+lib/domain/activity.dart        Stamina, the Aard charge, the merge rule
+lib/data/health/
+  step_reader.dart              Health Connect behind an interface
+  activity_sync.dart            platform -> activity_days
+lib/features/activity/
+  activity_providers.dart
+  activity_panel.dart           steps, distance, Stamina — and nothing else
+  manual_steps_sheet.dart
+```
+
+### `ActivityView` is the guard
+
+| Visible daily | Never rendered |
+|---|---|
+| Steps, distance | Active energy |
+| Stamina, the Aard charge | |
+
+Active energy is a term in expenditure, and intake beside expenditure is the
+verdict. A panel reading "8,240 steps · 437 kcal burned" beside the day's
+intake hands the user a subtraction.
+
+The stored row carries `activeKcal` because the weekly reckoning needs it. The
+UI is handed an `ActivityView`, which has **nowhere to put it** — the same
+move as `SealedValue`, one layer up. A widget cannot render what it was never
+given, and adding the field would mean editing `activity.dart` with the reason
+it is absent written directly above. See [[01-Vision]].
+
+Stamina is safe on the daily side because a **step goal is not a verdict
+target**: it is chosen in character creation and has nothing to do with energy
+balance, so no arrangement of steps-against-goal can be solved into a deficit.
+
+### Rules the sync holds
+
+- **A manual entry always wins.** The user typed it because the counter was
+  wrong; a sync that overwrote it would make the override useless.
+- **A day the device never saw is absent, not zero.** A zero claims the user
+  did not move. Absent says the device did not see it.
+- **Every sync re-reads a week.** Health Connect back-fills, so a day already
+  past can gain steps once a watch catches up.
+- **An interval counts towards the day it started.** Splitting a
+  midnight-crossing walk proportionally would be more correct and less
+  predictable, and the figures are read against a remembered calendar day.
+
+### Permissions
+
+Requested by the `health` plugin itself. There is no `permission_handler` in
+this project, and `MainActivity` extends `FlutterFragmentActivity` precisely so
+the plugin can run its permission contract — see the section below on why.
+
+Health Connect being absent is a **state, not an error**: Settings offers to
+install it, and steps can be typed in the Journal either way. The app reads
+movement and never writes any, which the permission screen says out loud.
+
 ## Durability — "survives reinstall"
 
 Two independent layers, because Android Auto Backup alone is not trustworthy
