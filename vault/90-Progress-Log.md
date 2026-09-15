@@ -1518,3 +1518,77 @@ button genuinely does not exist in the tree until then. Worth remembering: the
 failure reads like a missing widget, not like a scrolling problem.
 
 **Verified:** `flutter analyze` clean, 790 tests green.
+
+---
+
+## T20 — The photograph, made findable
+**Date:** 2026-09-15
+
+Reported as a feature request: *"I should be able to take a picture of the dish
+I cooked and the AI should break it down."* It has done exactly that since T9.
+790 → 797 tests.
+
+**The whole feature was invisible.** Both AI buttons rendered only when a key
+was saved, so on a keyless install there was no camera icon at all — no button,
+no hint, nothing to suggest the capability existed. The reasoning behind that
+gate was sound and is quoted in the source: *"a button that always fails is
+worse than no button, and the app is fully usable without one."* It produced the
+wrong outcome anyway.
+
+The flaw is that it weighed two options and there was a third. A button that
+*explains itself* is neither a button that always fails nor no button. Both now
+render always, dimmed without a key, and tapping one says what the model would
+do and offers a route to Settings. It is written as an offer rather than a
+warning, because nothing has gone wrong: the app is complete without a key, and
+the panel says so.
+
+Worth keeping as a general lesson — a capability nobody can discover is worth
+nothing, and "it would fail if they tried" is not a reason to hide it, only a
+reason to not let them try blindly.
+
+**The prompt was wrong for cooked food.** `photoSystem()` said *"Name only what
+you can actually see. Do not infer a side dish that is out of frame."* Right for
+a plated meal; wrong for a stew, a bake or a curry, where the components are by
+definition not individually visible. A model held to the strict reading returns
+one opaque item or nothing.
+
+The composite clause is not a loosening of that rule, it is the rule applied
+honestly — a stew is a thing you *can* see. What keeps it truthful is that a
+component the model did not see directly must carry a confidence of 0.5 or
+below, which the app already surfaces as a portion worth correcting, and that it
+is told to prefer a few large components over a long invented recipe.
+
+The "only what you can actually see" line was left **exactly** as it was, rather
+than reworded around the new clause. `ai_prompts_test.dart` asserts on that
+phrase, and a test guarding a §1-adjacent invariant is not something to edit
+around when the clause can simply be added beside it.
+
+The note field was moved out of the margin and given a heading — *"What did you
+cook?"* — with a worked example. The cook is the only source in the whole
+exchange that was actually present when the food was made, and what they say
+outweighs anything a model can infer from pixels.
+
+**`estimatePortion` is finally called.** It has had a client, a schema, a
+decoder, a prompt and tests since T8, `ResolvedPortion.worthRefining` has been
+sitting there as the hook it was built for, Settings has advertised the feature
+for twelve tasks, and nothing in `lib/` ever invoked it. Offered now in the
+portion sheet, on a portion the app has already admitted is a guess, only when a
+key exists.
+
+This is **not a fifth AI purpose** — CLAUDE.md §4 caps it at four and requires a
+deliberate decision to add one. This is the second of the four, completed. The
+budget maths is unchanged.
+
+Taking the estimate switches the entry to grams rather than storing a corrected
+multiplier against "handful". That is what makes it honest: the entry then reads
+45 g, which is what it means, and it inherits the confidence of an exact unit
+instead of the handful's 0.5.
+
+**Two things the tests caught.** A four-pixel vertical overflow at 360 logical
+pixels — the third time a fixed column at that width has done this in this
+project, and the reason the notice is now scrollable. And `WitcherButton`
+uppercases its own label, so `find.text('Not now')` finds nothing.
+
+**Verified:** `flutter analyze` clean, 797 tests green. Whether a model actually
+breaks a real cooked dish into sensible components is a device-and-key question
+that no test here can stand in for.

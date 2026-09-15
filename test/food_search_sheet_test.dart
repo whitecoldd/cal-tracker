@@ -3,6 +3,7 @@ import 'package:cal_tracker/data/remote/food_remote.dart';
 import 'package:cal_tracker/data/remote/remote_food.dart';
 import 'package:cal_tracker/data/tables.dart';
 import 'package:cal_tracker/domain/day.dart';
+import 'package:cal_tracker/features/ai/ai_providers.dart';
 import 'package:cal_tracker/features/journal/food_lookup_providers.dart';
 import 'package:cal_tracker/features/journal/food_search_sheet.dart';
 import 'package:cal_tracker/features/journal/journal_providers.dart';
@@ -68,6 +69,7 @@ void main() {
     ProductLookup lookup = const ProductUnknown(),
     Object? failure,
     String scanned = '7622300336738',
+    bool hasKey = false,
   }) async {
     tester.view.physicalSize = const Size(1080, 2400);
     tester.view.devicePixelRatio = 3;
@@ -88,6 +90,7 @@ void main() {
           recentFoodsProvider.overrideWith((ref) async => const []),
           remoteFoodSearchProvider
               .overrideWith((ref, query) async => const []),
+          aiAvailableProvider.overrideWith((ref) async => hasKey),
         ],
         child: MaterialApp(
           theme: AppTheme.build(),
@@ -356,6 +359,53 @@ void main() {
       );
       expect(stored, isNotNull);
       expect(stored!.source, FoodSource.manual);
+    });
+  });
+
+  group('the model, for someone who has not set a key', () {
+    // These buttons used to be hidden entirely until a key was saved. Sound
+    // reasoning -- a button that always fails is worse than no button -- with
+    // the wrong outcome: on a keyless install the app's most useful capability
+    // was invisible, and nobody asks for a feature they have never seen.
+
+    testWidgets('the photograph button is there with no key', (tester) async {
+      await pump(tester);
+
+      expect(find.byTooltip('Photograph the meal'), findsOneWidget);
+      expect(find.byTooltip('Describe the meal'), findsOneWidget);
+    });
+
+    testWidgets('and explains itself rather than failing', (tester) async {
+      await pump(tester);
+
+      await tester.tap(find.byTooltip('Photograph the meal'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('READ THE PLATE'), findsOneWidget);
+      expect(find.textContaining('broken into the foods'), findsOneWidget);
+      expect(find.text('BIND A KEY'), findsOneWidget);
+    });
+
+    testWidgets('the typed-meal button explains its own thing',
+        (tester) async {
+      await pump(tester);
+
+      await tester.tap(find.byTooltip('Describe the meal'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('DESCRIBE THE MEAL'), findsOneWidget);
+    });
+
+    testWidgets('it is an offer, not an error', (tester) async {
+      // The app is complete without a key and nothing has gone wrong.
+      await pump(tester);
+
+      await tester.tap(find.byTooltip('Photograph the meal'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('works without'), findsOneWidget);
+      // WitcherButton uppercases its own label.
+      expect(find.text('NOT NOW'), findsOneWidget);
     });
   });
 }

@@ -3,9 +3,11 @@ import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../data/ai/openrouter_client.dart';
 import '../../data/database.dart';
 import '../../data/tables.dart';
 import '../../domain/day.dart';
+import '../../domain/parsed_meal.dart';
 import '../../domain/portion.dart';
 import '../../providers/app_providers.dart';
 import '../../theme/tokens.dart';
@@ -14,6 +16,7 @@ import '../../widgets/measure_field.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
 import '../../widgets/witcher_button.dart';
+import '../ai/ai_providers.dart';
 
 /// Decides how much of a food was eaten, and into which meal.
 ///
@@ -81,6 +84,19 @@ class _PortionSheetState extends ConsumerState<PortionSheet> {
   late MealSlot _slot;
   bool _saving = false;
 
+  /// True while the model is being asked what a vague portion weighs.
+  bool _weighing = false;
+
+  /// What the model said it weighs, and why it thinks so.
+  ///
+  /// Kept beside the resolved portion rather than replacing it: the number is
+  /// an estimate of something nobody weighed, so it is shown with its reason
+  /// and taken only if the user accepts it.
+  PortionEstimate? _estimate;
+
+  /// Why the last estimate could not be made, if it could not.
+  String? _estimateFailure;
+
   @override
   void initState() {
     super.initState();
@@ -135,6 +151,61 @@ class _PortionSheetState extends ConsumerState<PortionSheet> {
         unit: _unit,
         gramsPerPiece: widget.food.gramsPerPiece,
       );
+
+  /// Asks the model what this portion weighs.
+  ///
+  /// The second of the four AI purposes in CLAUDE.md §4, and the one that has
+  /// had a client, a schema, a decoder, a prompt and tests since T8 with
+  /// nothing calling it. Not a fifth purpose: Settings has advertised this
+  /// since T8, and the budget maths is unchanged.
+  ///
+  /// User-initiated, on an entry the app has already marked as a rough
+  /// portion, so it costs a call only when someone actually wants one.
+  Future<void> _weigh() async {
+    setState(() {
+      _weighing = true;
+      _estimateFailure = null;
+    });
+
+    try {
+      final estimate = await ref.read(openRouterClientProvider).estimatePortion(
+            foodName: widget.food.name,
+            quantity: _quantityValue,
+            unit: _unit,
+            gramsPerPiece: widget.food.gramsPerPiece,
+            pieceName: widget.food.pieceName,
+          );
+      ref.read(aiCallTickProvider.notifier).spent();
+      if (mounted) setState(() => _estimate = estimate);
+    } on AiFailure catch (failure) {
+      if (mounted) {
+        setState(() => _estimateFailure = switch (failure) {
+              AiNoKey() => 'No key is bound. Weigh it yourself for now.',
+              AiBudgetSpent() => 'No readings left today.',
+              AiUnreachable() => 'No answer came. Weigh it yourself for now.',
+              AiUnreadable() => 'The answer made no sense.',
+            });
+      }
+    } finally {
+      if (mounted) setState(() => _weighing = false);
+    }
+  }
+
+  /// Takes the model's figure, by switching to grams.
+  ///
+  /// Writing it as grams rather than storing a corrected multiplier is what
+  /// makes it honest: the entry then says 45 g, which is what it means, and
+  /// `resolvePortion` records the higher confidence that comes with an exact
+  /// unit rather than inheriting the handful's.
+  void _acceptEstimate() {
+    final estimate = _estimate;
+    if (estimate == null) return;
+    setState(() {
+      _unit = PortionUnit.grams;
+      _quantity.text = _format(estimate.grams);
+      _estimate = null;
+    });
+  }
 
   @override
   void dispose() {
@@ -243,6 +314,20 @@ class _PortionSheetState extends ConsumerState<PortionSheet> {
                 const SizedBox(height: Space.lg),
 
                 _PortionReadout(portion: portion, unit: _unit),
+                // Offered only where it can help: a portion the app has
+                // already admitted is a guess, and a key that exists.
+                if (portion.worthRefining &&
+                    _quantityValue > 0 &&
+                    (ref.watch(aiAvailableProvider).valueOrNull ?? false)) ...[
+                  const SizedBox(height: Space.sm),
+                  _WeighByEye(
+                    weighing: _weighing,
+                    estimate: _estimate,
+                    failure: _estimateFailure,
+                    onAsk: _weighing ? null : _weigh,
+                    onAccept: _acceptEstimate,
+                  ),
+                ],
                 const SizedBox(height: Space.lg),
 
                 // --- which meal ---
@@ -284,6 +369,70 @@ class _PortionSheetState extends ConsumerState<PortionSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Offers the model's reading of a vague portion, and shows its reasoning.
+///
+/// The note is not decoration. The figure is an estimate of something nobody
+/// weighed, so it is shown with what it assumed — "a cupped handful, about
+/// 30 g" — which is what lets it be disbelieved rather than merely accepted.
+class _WeighByEye extends StatelessWidget {
+  const _WeighByEye({
+    required this.weighing,
+    required this.estimate,
+    required this.failure,
+    required this.onAsk,
+    required this.onAccept,
+  });
+
+  final bool weighing;
+  final PortionEstimate? estimate;
+  final String? failure;
+  final VoidCallback? onAsk;
+  final VoidCallback onAccept;
+
+  @override
+  Widget build(BuildContext context) {
+    final reading = estimate;
+
+    if (reading != null) {
+      return OrnatePanel(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              '${reading.grams.round()} g',
+              style: Type.numeral(size: 22, color: Hue.gold),
+            ),
+            if (reading.note case final note?) ...[
+              const SizedBox(height: Space.xxs),
+              Text(note, style: Type.lore(size: 11)),
+            ],
+            const SizedBox(height: Space.sm),
+            WitcherButton(label: 'Take it', onPressed: onAccept),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        WitcherButton(
+          label: weighing ? 'Weighing…' : 'Weigh it by eye',
+          icon: Icons.auto_awesome,
+          onPressed: onAsk,
+        ),
+        if (failure case final message?) ...[
+          const SizedBox(height: Space.xs),
+          Text(
+            message,
+            style: Type.lore(size: 11, color: Hue.adrenaline),
+          ),
+        ],
+      ],
     );
   }
 }

@@ -19,6 +19,7 @@ import '../../widgets/food_card.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/witcher_button.dart';
 import '../ai/ai_providers.dart';
+import '../settings/settings_screen.dart';
 import 'food_lookup_providers.dart';
 import 'journal_providers.dart';
 import 'manual_food_sheet.dart';
@@ -155,7 +156,23 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
 
   /// Scans a barcode and resolves it: library first, then upstream.
   /// Hands off to the AI sheet, and closes this one if it logged anything.
+  /// Whether a key has been saved. Drives appearance, never availability.
+  bool get _hasKey => ref.watch(aiAvailableProvider).valueOrNull ?? false;
+
+  /// Explains what the model would do, and where to enable it.
+  ///
+  /// Shown instead of the sheet when there is no key, so the capability is
+  /// discoverable without being a button that silently fails.
+  Future<void> _explainAi({required bool photo}) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _NoKeyNotice(photo: photo),
+    );
+  }
+
   Future<void> _speak() async {
+    if (!_hasKey) return _explainAi(photo: false);
     final logged = await SpeakMealSheet.show(
       context,
       day: widget.day,
@@ -166,6 +183,7 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
 
   /// Hands off to the photo sheet, closing this one if it logged anything.
   Future<void> _photograph() async {
+    if (!_hasKey) return _explainAi(photo: true);
     final logged = await PhotoMealSheet.show(
       context,
       day: widget.day,
@@ -202,9 +220,9 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
           _say(
             name == null
                 ? 'The ledger holds that sigil but names nothing and counts '
-                    'nothing.'
+                      'nothing.'
                 : 'The ledger knows it as "$name" but records no energy for '
-                    'it. Logging it would add a silent zero to the day.',
+                      'it. Logging it would add a silent zero to the day.',
           );
           setState(() => _offerToWrite = (name: name, barcode: code));
         case BarcodeOffline():
@@ -297,25 +315,29 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                         color: Hue.gold,
                         disabledColor: Hue.parchmentFaint,
                       ),
-                      // Offered only when a key exists. A button that always
-                      // fails is worse than no button, and the app is fully
-                      // usable without one.
-                      if (ref.watch(aiAvailableProvider).valueOrNull ?? false) ...[
-                        IconButton(
-                          onPressed: _busy ? null : _speak,
-                          tooltip: 'Describe the meal',
-                          icon: const Icon(Icons.auto_awesome),
-                          color: Hue.gold,
-                          disabledColor: Hue.parchmentFaint,
-                        ),
-                        IconButton(
-                          onPressed: _busy ? null : _photograph,
-                          tooltip: 'Photograph the meal',
-                          icon: const Icon(Icons.photo_camera_outlined),
-                          color: Hue.gold,
-                          disabledColor: Hue.parchmentFaint,
-                        ),
-                      ],
+                      // Always offered, with or without a key.
+                      //
+                      // These used to be hidden until a key was saved, on the
+                      // reasoning that a button which always fails is worse
+                      // than no button. Sound, and it produced the wrong
+                      // outcome: on a keyless install the app's most useful
+                      // capability was invisible, and nobody asks for a feature
+                      // they have never seen. A button that explains itself is
+                      // neither of the two cases that rule was weighing.
+                      IconButton(
+                        onPressed: _busy ? null : _speak,
+                        tooltip: 'Describe the meal',
+                        icon: const Icon(Icons.auto_awesome),
+                        color: _hasKey ? Hue.gold : Hue.parchmentFaint,
+                        disabledColor: Hue.parchmentFaint,
+                      ),
+                      IconButton(
+                        onPressed: _busy ? null : _photograph,
+                        tooltip: 'Photograph the meal',
+                        icon: const Icon(Icons.photo_camera_outlined),
+                        color: _hasKey ? Hue.gold : Hue.parchmentFaint,
+                        disabledColor: Hue.parchmentFaint,
+                      ),
                     ],
                   ),
                 ),
@@ -329,9 +351,9 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                             onWriteItDown: _offerToWrite == null
                                 ? null
                                 : () => _writeByHand(
-                                      name: _offerToWrite!.name,
-                                      barcode: _offerToWrite!.barcode,
-                                    ),
+                                    name: _offerToWrite!.name,
+                                    barcode: _offerToWrite!.barcode,
+                                  ),
                             onDismiss: () => setState(() {
                               _notice = null;
                               _offerToWrite = null;
@@ -375,26 +397,26 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
 
   Widget _localSliver(AsyncValue<List<Food>> local, bool searching) {
     return switch (local) {
-      AsyncData(:final value) when value.isEmpty =>
-        SliverToBoxAdapter(
-          child: _Empty(
-            searching: searching,
-            onWriteItDown: searching && !_busy ? _writeByHand : null,
-          ),
+      AsyncData(:final value) when value.isEmpty => SliverToBoxAdapter(
+        child: _Empty(
+          searching: searching,
+          onWriteItDown: searching && !_busy ? _writeByHand : null,
         ),
+      ),
       AsyncData(:final value) => SliverList.separated(
-          itemCount: value.length,
-          separatorBuilder: (_, _) => const SizedBox(height: Space.sm),
-          itemBuilder: (_, i) => Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Space.lg),
-            child: _Result(
-              food: value[i],
-              onTap: _busy ? null : () => _pick(value[i]),
-            ),
+        itemCount: value.length,
+        separatorBuilder: (_, _) => const SizedBox(height: Space.sm),
+        itemBuilder: (_, i) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: Space.lg),
+          child: _Result(
+            food: value[i],
+            onTap: _busy ? null : () => _pick(value[i]),
           ),
         ),
-      AsyncError(:final error) =>
-        SliverToBoxAdapter(child: _Failed(error: error)),
+      ),
+      AsyncError(:final error) => SliverToBoxAdapter(
+        child: _Failed(error: error),
+      ),
       _ => const SliverToBoxAdapter(child: _Spinner()),
     };
   }
@@ -411,24 +433,25 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
     final remote = ref.watch(remoteFoodSearchProvider(_parsed.remoteText));
 
     return switch (remote) {
-      AsyncData(:final value) when value.isEmpty =>
-        const SliverToBoxAdapter(child: SizedBox.shrink()),
+      AsyncData(:final value) when value.isEmpty => const SliverToBoxAdapter(
+        child: SizedBox.shrink(),
+      ),
       AsyncData(:final value) => SliverMainAxisGroup(
-          slivers: [
-            const _SectionHeader(label: 'FROM THE WIDER WORLD'),
-            SliverList.separated(
-              itemCount: value.length,
-              separatorBuilder: (_, _) => const SizedBox(height: Space.sm),
-              itemBuilder: (_, i) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: Space.lg),
-                child: _RemoteResult(
-                  food: value[i],
-                  onTap: _busy ? null : () => _pickRemote(value[i]),
-                ),
+        slivers: [
+          const _SectionHeader(label: 'FROM THE WIDER WORLD'),
+          SliverList.separated(
+            itemCount: value.length,
+            separatorBuilder: (_, _) => const SizedBox(height: Space.sm),
+            itemBuilder: (_, i) => Padding(
+              padding: const EdgeInsets.symmetric(horizontal: Space.lg),
+              child: _RemoteResult(
+                food: value[i],
+                onTap: _busy ? null : () => _pickRemote(value[i]),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
+      ),
       AsyncError() => const SliverToBoxAdapter(child: _Unreachable()),
       _ => const SliverToBoxAdapter(child: _Spinner()),
     };
@@ -490,9 +513,7 @@ class _Notice extends StatelessWidget {
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(message, style: Type.lore(size: 12)),
-                ),
+                Expanded(child: Text(message, style: Type.lore(size: 12))),
                 const SizedBox(width: Space.sm),
                 IconButton(
                   onPressed: onDismiss,
@@ -518,6 +539,82 @@ class _Notice extends StatelessWidget {
   }
 }
 
+/// What the model would do, for someone who has not set a key.
+///
+/// Deliberately not an error. Nothing has gone wrong — the app is complete
+/// without a key, and this is an offer rather than a warning.
+class _NoKeyNotice extends StatelessWidget {
+  const _NoKeyNotice({required this.photo});
+
+  final bool photo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Hue.voidBlack,
+      padding: const EdgeInsets.all(Space.lg),
+      child: SafeArea(
+        // Scrollable rather than a bare Column: at 360 logical pixels with a
+        // large text scale this overflows, which is the third time a fixed
+        // column on this screen width has done so in this project.
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                photo ? 'READ THE PLATE' : 'DESCRIBE THE MEAL',
+                style: Type.heading(size: 15, letterSpacing: 2),
+              ),
+              const SizedBox(height: Space.sm),
+              Text(
+                photo
+                    ? 'With a key bound, photograph what you cooked and it is '
+                          'broken into the foods it is made of, each one logged '
+                          'and kept in the Bestiary.'
+                    : 'With a key bound, write a meal in your own words — '
+                          '"two eggs and a slice of rye" — and each food is found '
+                          'and logged.',
+                style: Type.lore(size: 13),
+              ),
+              const SizedBox(height: Space.md),
+              OrnatePanel(
+                child: Text(
+                  'A free OpenRouter key, entered once in Settings and kept in '
+                  'the device keystore. Everything else in the app works without '
+                  'one, and always will.',
+                  style: Type.lore(size: 11, color: Hue.parchmentFaint),
+                ),
+              ),
+              const SizedBox(height: Space.lg),
+              WitcherButton(
+                label: 'BIND A KEY',
+                tone: ButtonTone.primary,
+                expand: true,
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const SettingsScreen(),
+                    ),
+                  );
+                },
+              ),
+              const SizedBox(height: Space.sm),
+              WitcherButton(
+                label: 'Not now',
+                expand: true,
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+              const SizedBox(height: Space.md),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _Spinner extends StatelessWidget {
   const _Spinner();
 
@@ -529,10 +626,7 @@ class _Spinner extends StatelessWidget {
         child: SizedBox(
           width: 22,
           height: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Hue.goldDim,
-          ),
+          child: CircularProgressIndicator(strokeWidth: 2, color: Hue.goldDim),
         ),
       ),
     );
@@ -596,7 +690,8 @@ class _PanelCard extends StatelessWidget {
       brand: brand,
       rarity: rankFood(panel),
       kcal: panel.kcal.round(),
-      detail: 'P ${panel.proteinG.round()}g · '
+      detail:
+          'P ${panel.proteinG.round()}g · '
           'C ${panel.carbsG.round()}g · '
           'F ${panel.fatG.round()}g',
       toxicity: readFoodToxins(panel).load,
