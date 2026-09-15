@@ -13,8 +13,9 @@ import '../../widgets/stat_bar.dart';
 import '../../widgets/witcher_button.dart';
 import '../activity/activity_providers.dart';
 import '../ai/ai_providers.dart';
+import '../backup/backup_providers.dart';
 
-/// Settings — the AI key, the daily allowance, and Health Connect.
+/// Settings — the AI key, the daily allowance, Health Connect, the archive.
 ///
 /// The key is typed here and nowhere else. It goes straight into the Android
 /// keystore: never into the repo, never into a `--dart-define`, which would
@@ -99,6 +100,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _Budget(budget: budget),
         const SizedBox(height: Space.lg),
         const _Health(),
+        const SizedBox(height: Space.lg),
+        const _Backup(),
       ],
     );
   }
@@ -215,6 +218,185 @@ class _HealthState extends ConsumerState<_Health> {
         ],
       ),
     );
+  }
+}
+
+/// The backup mirror: the folder, the files, and the way back.
+///
+/// Layer two of "survives reinstall" (CLAUDE.md / [[02-Architecture]]). Android
+/// Auto Backup is layer one and is invisible; this is the one the user can
+/// open, read, and copy off the phone.
+class _Backup extends ConsumerStatefulWidget {
+  const _Backup();
+
+  @override
+  ConsumerState<_Backup> createState() => _BackupState();
+}
+
+class _BackupState extends ConsumerState<_Backup> with WidgetsBindingObserver {
+  bool _working = false;
+  String? _outcome;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Android gives no callback when the user grants all-files access — they
+    // leave for Settings and may never come back. Re-checking on resume is the
+    // only way to notice.
+    if (state == AppLifecycleState.resumed) {
+      ref.read(backupTickProvider.notifier).changed();
+    }
+  }
+
+  Future<void> _grant() async {
+    await ref.read(storageAccessProvider).requestAccess();
+  }
+
+  Future<void> _write() async {
+    setState(() {
+      _working = true;
+      _outcome = null;
+    });
+
+    final result = await ref.read(backupServiceProvider).writeMirror();
+    ref.read(backupTickProvider.notifier).changed();
+
+    if (mounted) {
+      setState(() {
+        _working = false;
+        _outcome = result.message;
+      });
+    }
+  }
+
+  Future<void> _restore() async {
+    // A restore replaces everything. Asked for explicitly, every time — this
+    // is the one button in the app that can destroy a year of logging.
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: Hue.surface,
+        title: Text('Restore from the folder?', style: Type.heading(size: 16)),
+        content: Text(
+          'Everything currently in the app is replaced by what is in the '
+          'backup. This cannot be undone.',
+          style: Type.prose(size: 13),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Keep what I have', style: Type.label()),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Restore', style: Type.label(color: Hue.vitality)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _working = true;
+      _outcome = null;
+    });
+
+    final result = await ref.read(backupServiceProvider).restoreFromMirror();
+    ref.read(backupTickProvider.notifier).changed();
+
+    if (mounted) {
+      setState(() {
+        _working = false;
+        _outcome = result.message;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final granted = ref.watch(storageGrantedProvider).valueOrNull ?? false;
+    final existing = ref.watch(existingBackupProvider).valueOrNull;
+    final service = ref.watch(backupServiceProvider);
+
+    return OrnatePanel(
+      title: 'The archive',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'A copy of everything, written where you can reach it with a file '
+            'manager or a cable. It survives the app being uninstalled.',
+            style: Type.lore(size: 12),
+          ),
+          const SizedBox(height: Space.sm),
+          Text(
+            service.directory,
+            style: Type.prose(size: 11, color: Hue.parchmentFaint),
+          ),
+          const SizedBox(height: Space.md),
+          if (!granted) ...[
+            Text(
+              'Android needs to be told this app may write there.',
+              style: Type.prose(size: 13, color: Hue.adrenaline),
+            ),
+            const SizedBox(height: Space.sm),
+            WitcherButton(
+              label: 'Grant file access',
+              tone: ButtonTone.primary,
+              onPressed: _working ? null : _grant,
+            ),
+          ] else ...[
+            WitcherButton(
+              label: _working ? 'Writing…' : 'Write a backup now',
+              tone: ButtonTone.primary,
+              onPressed: _working ? null : _write,
+            ),
+            const SizedBox(height: Space.sm),
+            WitcherButton(
+              label: 'Restore from the folder',
+              tone: ButtonTone.danger,
+              onPressed: _working || existing == null ? null : _restore,
+            ),
+          ],
+          if (existing != null) ...[
+            const RunicDivider(),
+            Text(
+              'A backup from ${_stamp(existing.takenAt)} is sitting there, '
+              'holding ${existing.rowCount} rows.',
+              style: Type.lore(size: 12),
+            ),
+          ] else if (granted) ...[
+            const SizedBox(height: Space.sm),
+            Text(
+              'Nothing written yet.',
+              style: Type.lore(size: 11, color: Hue.parchmentFaint),
+            ),
+          ],
+          if (_outcome != null) ...[
+            const SizedBox(height: Space.sm),
+            Text(_outcome!, style: Type.prose(size: 12)),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static String _stamp(DateTime at) {
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${at.year}-${two(at.month)}-${two(at.day)} '
+        '${two(at.hour)}:${two(at.minute)}';
   }
 }
 

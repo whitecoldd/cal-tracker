@@ -391,9 +391,58 @@ The mirror uses `MANAGE_EXTERNAL_STORAGE`. That is acceptable **because this is
 a sideloaded personal build**; Play Store distribution would require swapping in
 a SAF directory picker with a persisted URI grant.
 
-The permission is requested by a small platform channel in `MainActivity.kt`
-firing `Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION`, **not** by
-`permission_handler` — see below.
+The permission is requested by a small platform channel in `MainActivity.kt`,
+**not** by `permission_handler` — see below. It fires
+`ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION` with a package URI so the user
+lands on *this* app rather than a list of every app installed, falling back to
+the bare action on OEM builds that lack the per-app screen.
+
+### As built (T13)
+
+```
+lib/data/backup/
+  snapshot.dart        the portable shape, and the Markdown rendering
+  storage_access.dart  the channel, behind an interface
+  backup_service.dart  database <-> folder
+lib/features/backup/
+  backup_providers.dart
+  restore_offer_screen.dart
+```
+
+> [!warning] The mirror reads and writes **below** the type converters
+> `Day` is a `yyyymmdd` integer and an enum is its name. Drift's own `toJson`
+> hands back the *Dart* objects — a `Day` instance, which will not encode at
+> all. The mirror uses `customSelect` / `customInsert` so it carries exactly
+> what SQLite holds.
+>
+> The deeper reason: **a converter is a property of this build, and a backup
+> has to outlive it.** A mirror written through today's converters stops
+> loading the day one changes. There are tests asserting the `Day` converter
+> and an enum column both survive a round trip; losing the former would move
+> every meal into a different week, which is the one failure that corrupts the
+> product.
+
+Other rules the service holds:
+
+- **A restore is one transaction**, tables cleared in reverse dependency order
+  and inserted in forward order. A failure halfway leaves the old data intact —
+  the worst outcome is not a failed restore but a half-restored database that
+  looks plausible.
+- **One bad row does not cost the restore.** An older schema can carry a column
+  this build lacks; losing a year to one row would be worse.
+- **The JSON is written to `.part` and renamed**, which is atomic on the same
+  filesystem. The Markdown goes first: a stale JSON beside a fresh Markdown is
+  recoverable, a truncated JSON is not.
+- **Restore is offered before onboarding**, and only when the database is fresh
+  *and* a backup exists. Asking afterwards would mean restoring over a profile
+  the user had just typed.
+- **"Continuous" means on pause.** Writing after every meal would spend a file
+  write per meal on a file nobody reads between meals; backgrounding is both
+  the end of a session and the last reliable moment in the process's life.
+
+The Markdown exists to be *read* — a row count per table, the profile, and every
+closed week with its account. A backup nobody ever opens is a backup nobody
+discovers is broken, and the file says plainly which of the two restores.
 
 ## Toolchain constraints
 

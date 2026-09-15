@@ -1,6 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'features/backup/backup_providers.dart';
+import 'features/backup/restore_offer_screen.dart';
 import 'features/journal/journal_screen.dart';
 import 'features/onboarding/onboarding_screen.dart';
 import 'providers/app_providers.dart';
@@ -44,19 +48,75 @@ class AppGate extends ConsumerWidget {
   }
 }
 
-class _Routed extends ConsumerWidget {
+class _Routed extends ConsumerStatefulWidget {
   const _Routed();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_Routed> createState() => _RoutedState();
+}
+
+class _RoutedState extends ConsumerState<_Routed> with WidgetsBindingObserver {
+  /// Set when the user chooses to start fresh despite a backup being there.
+  bool _declinedRestore = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // The mirror is written when the app goes to the background.
+    //
+    // "Continuous" without a background job: leaving the app is both the
+    // moment the user has finished changing things and the last moment the
+    // process is reliably alive. Writing on every log would spend a file write
+    // per meal for a file nobody reads between meals.
+    if (state == AppLifecycleState.paused) {
+      unawaited(_mirror());
+    }
+  }
+
+  Future<void> _mirror() async {
+    final service = ref.read(backupServiceProvider);
+    // Quietly does nothing without access, which is the common case until the
+    // user has been to Settings.
+    await service.writeMirror();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final profile = ref.watch(profileProvider);
 
     return switch (profile) {
       AsyncError(:final error) => _Failed(error: error),
-      AsyncData(value: null) => const OnboardingScreen(),
+      AsyncData(value: null) => _beforeOnboarding(),
       AsyncData() => const JournalScreen(),
       _ => const _Waiting(),
     };
+  }
+
+  /// A fresh install with a backup in the folder is offered it first.
+  ///
+  /// Asking after onboarding would mean restoring over a profile the user had
+  /// just finished typing.
+  Widget _beforeOnboarding() {
+    if (_declinedRestore) return const OnboardingScreen();
+
+    final offer = ref.watch(offerRestoreProvider).valueOrNull;
+    if (offer == null) return const OnboardingScreen();
+
+    return RestoreOfferScreen(
+      found: offer,
+      onDecline: () => setState(() => _declinedRestore = true),
+    );
   }
 }
 

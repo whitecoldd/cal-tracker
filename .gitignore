@@ -41,6 +41,8 @@ app.*.map.json
 
 # Android Studio will place build artifacts here
 /android/app/debug
+# Kotlin incremental-build state, created once MainActivity gained real code.
+/android/.kotlin/
 /android/app/profile
 /android/app/release
 
@@ -55,7 +57,9 @@ secrets.json
 /build/
 *.apk
 *.aab
-backup/
+# Anchored to the repo root. A bare `backup/` matches at any depth, which
+# silently excluded lib/data/backup/ and lib/features/backup/ in T13.
+/backup/
 
 # Golden test diffs (generated on failure, never committed)
 test/**/failures/

@@ -5,6 +5,7 @@ import 'package:cal_tracker/data/health/step_reader.dart';
 import 'package:cal_tracker/data/tables.dart';
 import 'package:cal_tracker/features/activity/activity_providers.dart';
 import 'package:cal_tracker/features/ai/ai_providers.dart';
+import 'package:cal_tracker/features/backup/backup_providers.dart';
 import 'package:cal_tracker/features/settings/settings_screen.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
@@ -56,6 +57,10 @@ void main() {
           healthAvailabilityProvider
               .overrideWith((ref) async => HealthAvailability.ready),
           healthPermissionProvider.overrideWith((ref) async => false),
+          // The backup panel reaches a platform channel and the filesystem;
+          // a widget test has neither. See CLAUDE.md §2.
+          storageGrantedProvider.overrideWith((ref) async => false),
+          existingBackupProvider.overrideWith((ref) async => null),
         ],
         child: MaterialApp(
           theme: AppTheme.build(),

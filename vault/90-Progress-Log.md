@@ -1026,3 +1026,86 @@ inspected. `flutter build apk --debug` succeeds.
   that is a design call rather than a wiring one.
 - **The Bestiary has no image.** `imagePath` is carried through from Open Food
   Facts and never rendered; the card has no room for it as drawn.
+
+---
+
+## T13 — Persistence
+**Date:** 2026-09-15
+
+The backup mirror, the restore, and the `MANAGE_EXTERNAL_STORAGE` platform
+channel that was deferred from T0. 20 new tests, 706 in total.
+
+**The backup operates below the type converters, and that was the bug worth
+finding.** The first pass used drift's own `toJson()` on each row — which
+hands back the *Dart* objects, so a `Day` came out as an instance of `Day` and
+the whole snapshot refused to encode.
+
+The fix is better than a workaround: the mirror now reads raw SQL through
+`customSelect` and writes it back through `customInsert`. A `Day` is a
+`yyyymmdd` integer and an enum is its name, which is what SQLite actually
+holds. More to the point, **a type converter is a property of this build and a
+backup has to outlive it** — a mirror written through today's converters is a
+mirror that stops loading the day one changes. There are tests asserting both
+the `Day` converter and an enum column survive a full round trip; losing the
+former would silently move every meal into a different week, which is the one
+thing that would corrupt the product.
+
+**A restore is all-or-nothing.** One transaction, tables cleared in reverse
+dependency order and inserted in forward order, so a failure halfway leaves
+the existing data intact. The worst outcome here is not a failed restore — it
+is a half-restored database that looks plausible.
+
+**One bad row does not cost the restore.** A backup written by an older schema
+can carry a column this build no longer has. Losing a year of history to a
+single unreadable row would be the worse failure, so the insert skips it and
+carries on.
+
+**The JSON is written to a `.part` file and renamed.** A rename is atomic on
+the same filesystem, so a backup is never left half-written — and the Markdown
+goes first, because a stale JSON beside a fresh Markdown is recoverable while
+a truncated JSON is not.
+
+**The Markdown mirror exists to be read.** The JSON is what restores the app;
+the Markdown is what makes the folder worth opening. A file nobody ever checks
+is a backup nobody finds out is broken, so it carries a row count per table,
+the profile, and every closed week with its written account — and it says
+plainly which of the two files actually restores.
+
+**Restore is offered before onboarding, not after.** A fresh install with a
+backup in the folder is asked first; asking afterwards would mean restoring
+over a profile the user had just finished typing. Both conditions have to hold
+— nothing here, and something there — so an app with a life of its own is
+never quietly overwritten.
+
+**"Continuous" turned out to mean "on pause".** Writing the mirror after every
+logged meal would spend a file write per meal on a file nobody reads between
+meals. Backgrounding the app is both the moment the user has finished changing
+things and the last moment the process is reliably alive.
+
+> [!note] The permission has no callback
+> Android returns nothing when the user grants all-files access — they leave
+> for a Settings screen and may never come back. Both the Settings panel and
+> the app root re-check on `AppLifecycleState.resumed` rather than awaiting a
+> result that may never arrive. The channel asks for
+> `ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION` with a package URI so the
+> user lands on this app rather than on a list of every app installed, with a
+> fallback for OEM builds that lack the per-app screen.
+
+> [!warning] `.gitignore` was silently eating the new source
+> T0 added a bare `backup/` line for a local backup-artefact folder. A git
+> pattern with no leading slash matches **at any depth**, so `lib/data/backup/`
+> and `lib/features/backup/` — the whole of this task's source — were excluded
+> from `git status` and would have been left out of the commit entirely.
+>
+> Caught only by reading the staged list before committing and noticing two
+> directories missing. Anchored to `/backup/`. Worth a look at any other bare
+> directory pattern: `secrets.json` and `*.env` are fine, but the same trap is
+> one careless line away.
+
+**Verified:** `flutter analyze` clean, 706 tests green, goldens regenerated and
+inspected, `flutter build apk --debug` succeeds — the Kotlin change made this
+build matter more than usual.
+
+**What a manual run still needs (T14):** an app icon, a splash screen, and a
+release APK. The reinstall test from the plan's verification list can only be
+done on a device and is the one thing here that no test can stand in for.
