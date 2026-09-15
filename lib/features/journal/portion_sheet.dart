@@ -313,7 +313,15 @@ class _PortionSheetState extends ConsumerState<PortionSheet> {
                 ),
                 const SizedBox(height: Space.lg),
 
-                _PortionReadout(portion: portion, unit: _unit),
+                // Resized rather than popped: the readout changes shape as the
+                // unit changes, and a jump there moves the whole sheet under
+                // the user's thumb.
+                AnimatedSize(
+                  duration: Motion.quick,
+                  curve: Motion.easeOut,
+                  alignment: Alignment.topCenter,
+                  child: _PortionReadout(portion: portion, unit: _unit),
+                ),
                 // Offered only where it can help: a portion the app has
                 // already admitted is a guess, and a key that exists.
                 if (portion.worthRefining &&

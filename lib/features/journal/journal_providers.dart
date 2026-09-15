@@ -20,14 +20,29 @@ final journalDayProvider = NotifierProvider<JournalDayNotifier, Day>(
 );
 
 class JournalDayNotifier extends Notifier<Day> {
+  int _lastShift = 0;
+
+  /// Which way the last move went: -1 back, +1 forward, 0 before any move.
+  ///
+  /// A plain field rather than a second provider, because two values that can
+  /// disagree is worse than one that cannot, and the rebuild-ordering question
+  /// a second provider raises has no good answer. It is only ever read during
+  /// the rebuild the day change itself caused, which is the one moment it
+  /// means anything — so the fact that it does not notify is correct rather
+  /// than a hazard.
+  int get lastShift => _lastShift;
+
   @override
   Day build() => Day.today();
 
-  void show(Day day) => state = day;
+  void show(Day day) {
+    _lastShift = day.isBefore(state) ? -1 : 1;
+    state = day;
+  }
 
-  void shift(int days) => state = state.addDays(days);
+  void shift(int days) => show(state.addDays(days));
 
-  void today() => state = Day.today();
+  void today() => show(Day.today());
 
   /// The Journal never shows the future: there is nothing to log there, and an
   /// empty tomorrow reads like data loss.
@@ -42,7 +57,7 @@ final journalEntriesProvider = StreamProvider<List<LoggedItem>>((ref) {
 
 /// A day's food, split into meal slots in serving order.
 class JournalDay {
-  const JournalDay({required this.day, required this.byMeal});
+  JournalDay({required this.day, required this.byMeal});
 
   factory JournalDay.from(Day day, List<LoggedItem> items) {
     final grouped = items.groupListsBy((i) => i.entry.mealSlot);
@@ -57,7 +72,16 @@ class JournalDay {
   final Day day;
   final Map<MealSlot, List<LoggedItem>> byMeal;
 
-  List<LoggedItem> get all => byMeal.values.expand((e) => e).toList();
+  late final List<LoggedItem> all =
+      byMeal.values.expand((e) => e).toList(growable: false);
+
+  /// What the day added up to.
+  ///
+  /// Carried here rather than read from [dailyTotalsProvider] so that a
+  /// rendered page is **one** value. Two providers settling independently is
+  /// what would let a day transition show the previous day's rows beside
+  /// zeroed totals for a frame.
+  late final DailyTotals totals = DailyTotals.of(all);
 
   bool get isEmpty => all.isEmpty;
 

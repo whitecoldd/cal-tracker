@@ -1,4 +1,8 @@
-import 'dart:ui';
+// Deliberately `animation` rather than `material`: this file is the bottom of
+// the theme layer and nothing here should be able to reach a widget. It
+// re-exports the `dart:ui` types the colour tokens need, plus the curve
+// [Motion] is defined in terms of.
+import 'package:flutter/animation.dart';
 
 /// Colour, spacing and geometry tokens for the Witcher 3 skin.
 ///
@@ -91,4 +95,23 @@ abstract final class Geometry {
 
   /// Radius used sparingly — this world has very few rounded corners.
   static const double radius = 2;
+}
+
+/// How the app moves.
+///
+/// Centralised for the same reason colour is: a duration picked per widget
+/// drifts, and the difference between a page being turned and a Material route
+/// sliding in is entirely in these numbers. Short, and barely any travel —
+/// CLAUDE.md §5 is engraved and weathered, not animated.
+abstract final class Motion {
+  /// A day giving way to another day.
+  static const Duration page = Duration(milliseconds: 220);
+
+  /// A scrim, a readout resizing — anything the eye should not have to wait on.
+  static const Duration quick = Duration(milliseconds: 140);
+
+  static const Curve easeOut = Curves.easeOutCubic;
+
+  /// How far a page slides, as a fraction of its width. Deliberately small.
+  static const double slide = 0.06;
 }

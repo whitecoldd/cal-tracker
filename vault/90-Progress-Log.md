@@ -1592,3 +1592,75 @@ uppercases its own label, so `find.text('Not now')` finds nothing.
 **Verified:** `flutter analyze` clean, 797 tests green. Whether a model actually
 breaks a real cooked dish into sensible components is a device-and-key question
 that no test here can stand in for.
+
+---
+
+## T21 — Turning the page
+**Date:** 2026-09-15
+
+The app's first animation outside onboarding, and the one the progress log has
+recorded as planned-and-dropped twice. 797 → 803 tests, no golden changed.
+
+**Not a swipeable `PageView`, and the reason is not the index arithmetic.** Six
+providers read the *global* day cursor rather than a page's day —
+`journalEntriesProvider`, `dayActivityProvider`, `dayActivityIsManualProvider`,
+`toxicityProvider`, `signChargesProvider` and `journalDayViewProvider`. A page
+view builds the adjacent page *before* the cursor moves, so the incoming page
+would render the current day's numbers and then visibly flicker to the right
+ones. Making it honest means re-keying all six as `.family<..., Day>` and
+touching every one of their tests. That is its own task, and the right one to do
+first if swipe-to-change-day is ever wanted.
+
+**The trap was worse than a loading flash.** When the cursor moves,
+`journalEntriesProvider` is recreated, and in Riverpod 2 `whenData` on an
+`AsyncLoading` yields a plain `AsyncLoading` — **previous data is not carried
+through**. So the old `switch (view)` fell to its `SizedBox.shrink()` arm and the
+body blanked for a frame. And `dailyTotalsProvider` was a separate provider with
+its own `orElse: empty`, so even a partial fix would have shown the previous
+day's rows beside zeroed totals.
+
+Both are fixed by making a rendered page **one atomic value**: `DailyTotals` is
+now a `late final` on `JournalDay`, and a small stateful widget holds the last
+*settled* page and ignores loading frames. The body therefore lags the date
+header by the length of one drift query. That is deliberate and is commented as
+such — a page that arrives late beats one that slides in empty and then fills.
+
+The switcher is keyed on the day the **data** is for, not on the cursor, so
+adding an entry to the same day is a plain rebuild rather than a page turn.
+
+**Direction is a plain field on the notifier.** Not a second provider: two values
+that can disagree is worse than one that cannot, and a second provider raises a
+rebuild-ordering question with no good answer. It is only ever read during the
+rebuild the day change itself caused, so the fact that it does not notify is
+correct rather than a hazard — and `lastShift` is directly unit-testable.
+
+One thing that is easy to get wrong: `AnimatedSwitcher` rebuilds the *outgoing*
+child with the same `transitionBuilder` and a reversing animation, so without
+telling the two apart by key the old page slides back the way it came instead of
+out the other side.
+
+**Two bugs found by the tests, both mine.**
+
+A `CircularProgressIndicator` left in the tree at zero opacity never stops
+spinning, so `pumpAndSettle` can never settle — every widget test on the search
+sheet timed out at once. The scrim still fades; the spinner inside it is built
+only while it is spinning.
+
+And a `SliverAnimatedOpacity` at a constant `opacity: 1` animates nothing. It was
+written to fade the Open Food Facts section in, and it would have been a no-op
+dressed as an animation, so it was dropped rather than shipped. The local list is
+deliberately not animated either: it changes on every settled keystroke, and
+fading each one reads as lag.
+
+**Motion lives in the theme tokens**, for the same reason colour does — 220ms and
+a 6% slide is a page being turned, not a Material route, and a duration picked
+per widget drifts. `tokens.dart` now imports `package:flutter/animation.dart`
+rather than `material`: it is the bottom of the theme layer and nothing in it
+should be able to reach a widget.
+
+**No golden changed**, which is the check that the claim holds:
+`AnimatedSwitcher` does not animate its first child, so a freshly pumped screen
+is at rest. Had one changed, the key would have been wrong.
+
+**Verified:** `flutter analyze` clean, 803 tests green, goldens pass without
+regeneration.

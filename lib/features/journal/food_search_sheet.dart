@@ -373,22 +373,37 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                 ),
               ],
             ),
-            if (_busy)
-              const Positioned.fill(
-                child: ColoredBox(
-                  color: Color(0x990D0B0A),
-                  child: Center(
-                    child: SizedBox(
-                      width: 26,
-                      height: 26,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Hue.gold,
-                      ),
+            // Faded rather than switched on. A scrim that snaps into place
+            // was the most Material-feeling thing left in the app.
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !_busy,
+                child: AnimatedOpacity(
+                  opacity: _busy ? 1 : 0,
+                  duration: Motion.quick,
+                  curve: Motion.easeOut,
+                  child: ColoredBox(
+                    color: const Color(0x990D0B0A),
+                    // The spinner exists only while it is spinning. A
+                    // CircularProgressIndicator never stops, so leaving one in
+                    // the tree at zero opacity means pumpAndSettle can never
+                    // settle and every widget test on this sheet times out.
+                    child: Center(
+                      child: _busy
+                          ? const SizedBox(
+                              width: 26,
+                              height: 26,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Hue.gold,
+                              ),
+                            )
+                          : const SizedBox.shrink(),
                     ),
                   ),
                 ),
               ),
+            ),
           ],
         ),
       ),
