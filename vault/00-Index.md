@@ -19,6 +19,7 @@ all data on device.
 - [[04-Data-Model]] — drift tables and relationships
 - [[05-AI-Layer]] — OpenRouter, models, budget, prompts
 - [[90-Progress-Log]] — one entry per shipped task
+- [[91-Improvement-Plan]] — open issues and the tasks that close them
 
 ## Where this lives
 

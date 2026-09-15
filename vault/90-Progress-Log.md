@@ -1174,3 +1174,51 @@ returns. The round trip is covered against a real database and a real folder,
 but the folder in the test is a temp directory, not
 `/storage/emulated/0/Documents/`. Same for the icon and splash — they parse,
 they build, and what they *look like* is a device question.
+
+---
+
+## T15 — The improvement plan
+**Date:** 2026-09-15
+
+No code. The first real-device shakedown of the T14 build produced five reports,
+and reading the code around them turned up six more issues that had never been
+written down. [[91-Improvement-Plan]] is now where they live, and
+[[00-Index]] points at it.
+
+**Why a separate note rather than more of this log.** This file is a record of
+what *happened*, in order, and it is 1,176 lines. An open issue buried in it is
+an issue nobody will find — which is precisely what happened to four of the six.
+Two of them ("Yrden reads a water log nothing writes", carried from T12a to T12b
+and then dropped) had been written down twice and still went unscheduled. A
+backlog needs to be a list you can read in one sitting.
+
+**Three of the five reports were narrower than they looked**, and that is the
+part worth recording here:
+
+- **"New feature: photograph a dish."** Already shipped in T9. The button renders
+  only when a key is saved, so on a keyless install it is invisible. The work is
+  discoverability, not capability.
+- **"Add water tracking."** The table, the DAO and the Yrden sign have existed
+  since T12a. `upsertWater` has zero callers. No migration needed.
+- **"The barcode scan dies instantly."** Not a camera fault. The scan succeeds
+  and returns the code; the failure message is posted through the root
+  `ScaffoldMessenger` and painted into the `JournalScreen` scaffold —
+  *underneath* the opaque bottom sheet. Both error strings are completely
+  covered by void black.
+
+That last one is the lesson of the round. The error handling was written, tested
+at the provider level, and correct; it just had nowhere to appear. Every path in
+`_scan` reports through one channel, and that channel had been invisible since
+the sheet was built in T4. There is no widget test for the search sheet or the
+scanner, which is why nothing caught it — `test/food_lookup_test.dart` covers the
+providers and the fake remote only.
+
+**Two things it changed about the plan.** The barcode fix leads, because it is
+the only report where the app loses data the user tried to give it. And no new
+AI use case is added: `../CLAUDE.md` §4 caps AI at four purposes, photo → items
+is already one of them, and the portion estimator that T20 wires up is the
+second purpose, which Settings has advertised since T8 without anything calling
+it. The budget maths is unchanged.
+
+**Verified:** `flutter analyze` clean, 706 tests green — both unchanged, as they
+should be for a documentation commit.
