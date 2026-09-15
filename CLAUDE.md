@@ -79,8 +79,12 @@ is wrong, however convenient.
 - Commit messages: `T<n>: <imperative summary>`, then a short body explaining
   *why*. End with the Co-Authored-By trailer.
 - Never commit secrets. The OpenRouter key lives in `flutter_secure_storage`
-  and is entered in-app. There is no `.env` in this repo and no key in any
-  Dart source, test or fixture.
+  and is entered in-app. No key belongs in any Dart source, test or fixture.
+  `.env` is gitignored and untracked — only `.env.example`, which holds a
+  placeholder, is committed. A local `.env` may exist on a dev machine; it is
+  not an input to the app. **Nothing in `lib/` reads `.env`, and nothing reads
+  a `--dart-define`.** Keep it that way: `--dart-define-from-file=.env` would
+  bake the key into the APK, which is exactly what secure storage avoids.
 
 ---
 
