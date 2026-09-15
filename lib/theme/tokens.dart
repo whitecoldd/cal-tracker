@@ -60,6 +60,11 @@ abstract final class Hue {
   // --- rarity ---
   static const Color rarityCommon = Color(0xFF9A9086);
   static const Color rarityRare = Color(0xFF4E7FB0);
+
+  /// The waterskin and the Yrden glyph. The same steel-blue as [rarityRare],
+  /// named separately because it is used for a different reason — a token that
+  /// means "rare" should not be what a water bar reaches for.
+  static const Color water = Color(0xFF4E7FB0);
   static const Color rarityEpic = Color(0xFF9B59B6);
   static const Color rarityRelic = Color(0xFFC9A227);
 }

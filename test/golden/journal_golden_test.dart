@@ -10,6 +10,7 @@ import 'package:cal_tracker/domain/portion.dart';
 import 'package:cal_tracker/features/activity/activity_providers.dart';
 import 'package:cal_tracker/features/journal/journal_providers.dart';
 import 'package:cal_tracker/features/journal/journal_screen.dart';
+import 'package:cal_tracker/features/journal/water_providers.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
 import 'package:clock/clock.dart';
@@ -125,6 +126,13 @@ void main() {
               ),
             ),
             dayActivityIsManualProvider.overrideWith((ref) async => false),
+            // A part-full waterskin, so the golden shows the panel with real
+            // figures rather than an empty bar.
+            waterLogProvider.overrideWith(
+              (ref) => Stream.value(
+                WaterLog(day: _today, ml: 1500, updatedAt: _now),
+              ),
+            ),
           ],
           child: MaterialApp(
             debugShowCheckedModeBanner: false,

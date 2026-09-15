@@ -1296,3 +1296,80 @@ sheet had none at all.
 
 **Verified:** `flutter analyze` clean, 720 tests green, `flutter build apk
 --debug` succeeds. The scan itself is still a device question.
+
+---
+
+## T17 — The waterskin
+**Date:** 2026-09-15
+
+Yrden has read a water log since T12a that nothing could write. The gap was
+recorded twice — once in T12a, again in T12b's "gaps left open" — and scheduled
+neither time. It is now fillable. 720 → 738 tests.
+
+**No schema change.** `WaterLogs`, `TrackingDao.upsertWater` and the sign were
+all built and tested two tasks ago; the only missing piece was a button. Worth
+noting for its own sake: the cheapest feature in this repo was also the one that
+sat open longest, because nothing in the log said how cheap it was. That is why
+[[91-Improvement-Plan]] now exists.
+
+**A food counts as a drink because of how it was logged**, not because of
+anything on the food row. Nothing there marks a food as a liquid, and the same
+row is a splash of milk or a glass of it depending on the entry. So the rule is
+`entry.unit == PortionUnit.millilitres`, and the volume credits 1:1 — which is
+not a fudge, because `PortionUnit.millilitres` already declares one gram per
+millilitre, so `grams` on such an entry *is* the volume and has been since T4.
+
+**Only alcohol discounts, and it discounts to zero.** The temptation was to
+discount coffee and tea too, and it was refused on the grounds that no caffeine
+figure is stored on a food anywhere in this app — any such number would have had
+no source behind it, and the current evidence is that caffeinated drinks hydrate
+about as well as water anyway. Alcohol differs on both counts: `alcoholG` is
+stored, and it is a genuine diuretic. Crediting it as nothing is the
+simplification that can never *overstate* how much someone has drunk, which is
+the only direction that matters. Lore, not a physician, as everywhere else.
+
+**The two sources cannot double count, by construction.** The tapped figure is a
+`water_logs` row; the drink figure derives from `entries`. They are disjoint, and
+`Hydration` is the single place they are added, read by both the panel and the
+glyph — so the two can never disagree about how much someone drank. The claim is
+pinned in `signs_test.dart` as an equality: 2,000 tapped, 2,000 drunk and
+1,000 + 1,000 all charge Yrden identically.
+
+Someone who both taps +500 and logs "Water, 500ml" has recorded the same glass
+twice. That is a thing they did, not a thing the app did.
+
+**A bug fixed on the way.** `signChargesProvider` read water through `waterFor`,
+a one-shot query. While nothing could write water this was merely pointless;
+with the waterskin writing to it, the glyph would have shown a figure from
+before the last sip. It watches `hydrationProvider` now.
+
+**Two traps worth recording.**
+
+`water_logs` holds one total per day, not a list of sips, so there is no log to
+undo — the minus button is a *decrement* and reads as one. It remembers the last
+amount added so the immediate undo is exact, and falls back to the smaller step
+after a rebuild. Anything better needs a per-sip table, which is not worth a
+schema version for a button.
+
+And `journal_test.dart` asserts that no text on the Journal contains `/`, plus a
+banned-word list including *target* and *goal*. A default `StatBar` renders
+`1500 / 2000` and fails it — correctly, because an `x / y` ring is the progress
+framing this app exists to refuse. The bar reads "1,500 of 2,000 ml" and the
+caption says Yrden asks for two litres. The test was honoured, not edited; it
+caught exactly what it was written to catch, two tasks after it was written.
+
+**Both Journal tests and the Journal golden gained a `waterLogProvider`
+override.** Without it every one of them opens a live drift stream, which fake
+async never lets finish and which leaks a timer on cancel — the same lesson as
+T10, T11 and T12b, and now the fourth time a screen gaining a provider has
+broken the widget tests that mount it. `path_screen_test` overrides
+`signChargesProvider` wholesale and was unaffected.
+
+**Verified:** `flutter analyze` clean, 738 tests green, `journal_day.png`
+regenerated and inspected.
+
+**One note on the toolchain, from doing this wrong.** Two `flutter test` runs
+overlapping collide on `build/native_assets/sqlite3.dll` and the second dies
+with the `PathExistsException` the rules warn about — the same wreckage as
+killing a run, reached from the other direction. `rm -rf build/native_assets`
+is still the fix. Do not start a second run while one is in flight.

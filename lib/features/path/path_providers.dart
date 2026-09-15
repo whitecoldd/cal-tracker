@@ -13,6 +13,7 @@ import '../../domain/signs.dart';
 import '../../providers/app_providers.dart';
 import '../activity/activity_providers.dart';
 import '../journal/journal_providers.dart';
+import '../journal/water_providers.dart';
 import '../reckoning/reckoning_providers.dart';
 
 /// Every XP the user has ever been awarded.
@@ -63,14 +64,17 @@ final adrenalineProvider = FutureProvider<double>((ref) async {
 /// The five Signs for the selected day.
 final signChargesProvider = FutureProvider<SignCharges>((ref) async {
   final items = ref.watch(journalEntriesProvider).valueOrNull ?? const [];
-  final day = ref.watch(journalDayProvider);
   final profile = ref.watch(profileProvider).valueOrNull;
   final weight = ref.watch(latestWeightProvider).valueOrNull;
   final activity = ref.watch(dayActivityProvider).valueOrNull;
   final loggedDays = await ref.watch(recentLoggedDaysProvider.future);
 
   final totals = NutrientTotals.of(items.servings);
-  final water = await ref.watch(databaseProvider).trackingDao.waterFor(day);
+  // Watched rather than read once. `waterFor` is a one-shot query, so before
+  // there was any way to record a glass of water this was merely pointless;
+  // with the waterskin writing to it, it would have left the glyph showing a
+  // figure from before the last sip.
+  final hydration = ref.watch(hydrationProvider);
 
   return chargeSigns(
     totals: totals,
@@ -79,7 +83,7 @@ final signChargesProvider = FutureProvider<SignCharges>((ref) async {
     distanceM: activity?.distanceM ?? 0,
     stepGoal: profile?.dailyStepGoal ?? 10000,
     loggedDaysInWeek: loggedDays,
-    waterMl: water?.ml ?? 0,
+    waterMl: hydration.totalMl,
     mealSlotsUsed: items.map((i) => i.entry.mealSlot).toSet().length,
   );
 });

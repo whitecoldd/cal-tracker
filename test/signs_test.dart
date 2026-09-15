@@ -1,3 +1,4 @@
+import 'package:cal_tracker/domain/hydration.dart';
 import 'package:cal_tracker/domain/nutrition.dart';
 import 'package:cal_tracker/domain/scoring.dart';
 import 'package:cal_tracker/domain/signs.dart';
@@ -157,6 +158,26 @@ void main() {
           _charge(_lentils, waterMl: waterTargetMl, mealSlots: 0)[Sign.yrden];
 
       expect(waterOnly, closeTo(0.6, 0.0001));
+    });
+
+    test('it does not matter which source the water came from', () {
+      // Yrden is charged from a single total, so tapping the waterskin and
+      // logging a drink as food cannot both be counted for the same glass.
+      // Hydration is where the two are added; this is the claim that adding
+      // them is all that happens.
+      const tapped = Hydration(loggedMl: waterTargetMl, fromDrinksMl: 0);
+      const drunk = Hydration(loggedMl: 0, fromDrinksMl: waterTargetMl);
+      const split = Hydration(
+        loggedMl: waterTargetMl ~/ 2,
+        fromDrinksMl: waterTargetMl ~/ 2,
+      );
+
+      final a = _charge(_lentils, waterMl: tapped.totalMl, mealSlots: 3);
+      final b = _charge(_lentils, waterMl: drunk.totalMl, mealSlots: 3);
+      final c = _charge(_lentils, waterMl: split.totalMl, mealSlots: 3);
+
+      expect(b[Sign.yrden], a[Sign.yrden]);
+      expect(c[Sign.yrden], a[Sign.yrden]);
     });
 
     test('a fourth meal slot adds nothing', () {

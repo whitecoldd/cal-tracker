@@ -7,6 +7,7 @@ import 'package:cal_tracker/domain/portion.dart';
 import 'package:cal_tracker/features/activity/activity_providers.dart';
 import 'package:cal_tracker/features/journal/journal_providers.dart';
 import 'package:cal_tracker/features/journal/journal_screen.dart';
+import 'package:cal_tracker/features/journal/water_providers.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
 import 'package:clock/clock.dart';
@@ -300,6 +301,9 @@ void main() {
             // async never lets that query finish. See CLAUDE.md §2.
             dayActivityProvider.overrideWith((ref) async => ActivityView.empty),
             dayActivityIsManualProvider.overrideWith((ref) async => false),
+            // The waterskin reads a live query stream, which fake async never
+            // lets finish and which leaks a timer on cancel. Same rule.
+            waterLogProvider.overrideWith((ref) => Stream.value(null)),
           ],
           child: MaterialApp(
             theme: AppTheme.build(),

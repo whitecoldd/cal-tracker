@@ -15,6 +15,7 @@ import '../shell/paths_drawer.dart';
 import 'food_search_sheet.dart';
 import 'journal_providers.dart';
 import 'portion_sheet.dart';
+import 'water_panel.dart';
 
 /// Today, as a quest log.
 ///
@@ -133,6 +134,8 @@ class _Body extends StatelessWidget {
         _TotalsPanel(totals: totals),
         const SizedBox(height: Space.md),
         const ActivityPanel(),
+        const SizedBox(height: Space.md),
+        const WaterPanel(),
         const SizedBox(height: Space.lg),
         if (day.isEmpty)
           const _EmptyDay()
