@@ -53,10 +53,18 @@ class SealedNode extends StatelessWidget {
         SizedBox(
           height: _bandHeight,
           child: switch (value) {
+            // Scaled down rather than wrapped: the band has a fixed height so
+            // that unsealing does not make the panel jump, and a value long
+            // enough to wrap ("-3850 kcal") would be clipped by it instead.
             Revealed(value: final v) => Center(
-                child: Text(
-                  (format ?? (n) => n.round().toString())(v),
-                  style: Type.numeral(size: 28, color: accent),
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    (format ?? (n) => n.round().toString())(v),
+                    maxLines: 1,
+                    softWrap: false,
+                    style: Type.numeral(size: 28, color: accent),
+                  ),
                 ),
               ),
             Sealed() => const _ChainedBand(),

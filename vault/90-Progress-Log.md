@@ -498,3 +498,100 @@ in it.
 
 **Verified:** `flutter analyze` clean, 253 tests green, goldens regenerated and
 inspected, `flutter build apk --debug` succeeds.
+
+---
+
+## T7 — RevealGate and the sealed verdict
+**Date:** 2026-09-15
+
+The gate, the week's verdict, the Reckoning screen, and the tests that prove
+nothing leaks Monday to Saturday. 158 new tests, 411 in total. Detail in
+[[02-Architecture]].
+
+`SealedValue<T>` landed back in T1 next to its visual treatment. T7 is
+everything that decides *when* it opens.
+
+**The gate takes a callback, not a value.**
+
+```dart
+SealedValue<T> gate<T>(Day subject, {required Day today, required T Function() compute})
+```
+
+This is the one design decision the task turned on. Wrapping an
+already-computed number in `Sealed` would leave it sitting in memory —
+reachable by a log line, a `toString`, a crash report, or a future refactor
+that reaches past the type. With a callback, a sealed verdict is **never
+calculated at all**. The seal is not a curtain drawn over an answer; there is
+no answer yet. There is a test that counts invocations and asserts zero.
+
+**Two ways to be readable, and only two:** the week has closed (history is not
+the verdict, and refusing it would make the app useless as a record), or today
+is the day that closes the week the value belongs to. The live week on any
+other day, and any future week, are sealed.
+
+**`loggedDays` and `daysUntilReveal` are deliberately *not* sealed.** Neither
+says anything about gaining or losing. `loggedDays` is the figure that tells
+the user how much the sealed ones will be worth — a verdict drawn from two
+logged days deserves suspicion — and `daysUntilReveal` is what makes a seal
+read as deliberate rather than broken. A blackout that cannot say when it lifts
+is indistinguishable from a bug.
+
+**Judgements inside the verdict**, each of which could have gone the lazy way:
+
+- The average balance is per *logged* day. Dividing a four-day week by seven
+  would report a deficit the user never ran; an unlogged day is unknown, not
+  fasted.
+- A weight move under 0.3 kg reads as `holding`. Swings of a kilogram from
+  water and gut contents are ordinary, and calling 0.2 kg a trend is exactly
+  the reflex this app exists to break.
+- Energy balance rounds to 10 kcal, because it carries the error of a BMR
+  estimate, a step count and a hundred portion guesses.
+- Past ±2 kg a week nothing is credible — that is a mis-typed portion, and a
+  confident "you gained 4 kg" is worse than silence.
+
+**`RevealGate` needed value equality.** It is rebuilt whenever the profile
+stream emits, and without `==` every rebuild yields an instance Riverpod
+treats as different, invalidating everything watching it. Found while chasing
+the hang below; it was not the cause, but it was a real bug.
+
+> [!note] The hang, and what it actually was
+> `reckoning_provider_test.dart` hung on every test. The obvious suspect was
+> the fake-async trap in §2, but this was a plain `test`, not `testWidgets` —
+> the event loop was real. Bisecting with throwaway probe providers narrowed it
+> to a combination: a `FutureProvider` watching **two** live drift streams.
+>
+> The cause is that `.future` re-chains when a pending provider is invalidated.
+> Each stream's first emission invalidated the reckoning mid-flight, and the
+> read never settled. **In the app this is invisible** — the UI just rebuilds,
+> which is the behaviour we want when food is logged. It only bites a test that
+> awaits `.future`. The fix is to let each stream deliver before the provider
+> is first built.
+>
+> Lesson: when a provider test hangs, check whether the provider is being
+> invalidated rather than assuming the query is stuck. Awaiting `.future` on
+> something with live dependencies is a race, not a read.
+
+**Testing is split by what actually needs a database.** The screen renders a
+`Reckoning`, and a `Reckoning` is pure — so the widget tests build one with
+`reckon()` directly and never touch drift. That took the screen suite from
+6m35s of timeouts to 4 seconds, and lost no coverage: the provider that
+assembles one from the database has its own suite, off the widget binding
+where the event loop is real.
+
+**The goldens earned their keep twice more.** Rendering the revealed state
+showed "-3850" with no unit beside "-0.90 KG", which is ambiguous. Adding
+`kcal` then *wrapped and clipped*, because the sealed and revealed states share
+a fixed band height so unsealing does not make the panel jump. Fixed in the
+primitive: `SealedNode` now scales a long numeral down rather than wrapping it.
+Neither problem would have failed a test.
+
+The sealed golden is the one worth keeping an eye on. Four chained wax seals,
+their lore, and a countdown — it should read as something locked and waiting,
+never as a screen that failed to load.
+
+**Reachability:** a second app-bar action on the Journal. T11 builds this out
+into the full Week's End with charts, the level-up and the one AI narrative;
+T7 is the gate and the seal.
+
+**Verified:** `flutter analyze` clean, 411 tests green, goldens regenerated and
+inspected, `flutter build apk --debug` succeeds.

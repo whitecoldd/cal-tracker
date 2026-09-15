@@ -69,12 +69,77 @@ physically cannot render a number it has not unwrapped, and
 `non_exhaustive_switch_expression` is an **analyzer error**, so adding a state
 without handling it fails the build.
 
-`RevealGate` decides: revealed if the date is before the current week's start,
-or today is the configured week-end weekday.
+`RevealGate` (T7) is the single place that answers "is the week closed yet?".
+Two ways to be readable, and only two:
+
+- **The week has closed.** A past week is history; there is nothing left to
+  influence by reading it, and refusing would make the app useless as a record.
+- **Today is the week-end day**, and the value belongs to the week that day
+  closes. This is the reveal.
+
+Anything else — the live week on any other day, or a future week — is sealed.
+
+```
+lib/domain/
+  reveal_gate.dart   RevealGate: the one definition of "closed yet?"
+  reckoning.dart     Reckoning: the week's verdict, every field sealed
+lib/features/reckoning/
+  reckoning_providers.dart
+  reckoning_screen.dart
+```
+
+### The gate takes a callback, not a value
+
+```dart
+SealedValue<T> gate<T>(Day subject, {required Day today, required T Function() compute})
+```
+
+A sealed verdict is **never calculated at all**. If the arithmetic ran and the
+result were merely wrapped, the number would exist in memory — reachable by a
+log line, a `toString`, a crash report, or a future refactor that reaches past
+the type. The seal is not a curtain drawn over an answer; there is no answer
+yet. There is a test asserting the callback is not invoked.
+
+### What is sealed, and what is not
+
+| Sealed | Not sealed |
+|---|---|
+| Energy balance, and its per-day average | Days logged |
+| Weight delta and trend | Days until the week closes |
+| Projected weight change | The week's start and end dates |
+| Body-fat estimate | |
+
+`loggedDays` is the interesting exclusion. It says nothing about gaining or
+losing, and it is the one figure that tells the user how much the sealed ones
+will be worth — a verdict drawn from two logged days deserves to be read with
+suspicion. `daysUntilReveal` is likewise a calendar fact, and it is what makes
+the seal read as deliberate rather than broken.
+
+### Judgements inside the verdict
+
+- **The average is per *logged* day, not per calendar day.** Dividing a
+  four-day week by seven would report a deficit the user never ran. An
+  unlogged day is unknown, not fasted.
+- **A weight move under 0.3 kg is `holding`.** Day-to-day swings of a kilogram
+  from water, glycogen and gut contents are ordinary; calling a 0.2 kg move a
+  trend is the behaviour this whole app exists to prevent.
+- **Energy balance is rounded to 10 kcal.** It carries the error of a BMR
+  estimate, a step count and a hundred portion guesses. Reporting it to the
+  calorie would be a lie about how well it is known.
+- **Beyond ±2 kg a week the projection is not credible** — almost always a
+  mis-typed portion or a missing week of logs, and a confident "you gained
+  4 kg" would be worse than saying nothing.
+
+### `RevealGate` has value equality on purpose
+
+It is rebuilt whenever the profile stream emits. Without `==`, each rebuild
+produces an instance Riverpod considers *different*, invalidating everything
+watching it — including the provider that assembles the week.
 
 Tests freeze the clock to each weekday and assert `Sealed` on every non-reveal
-day. That is why `package:clock` is mandatory and `DateTime.now()` is banned
-outside `clock.now()`.
+day, across all seven possible week-end days. That is why `package:clock` is
+mandatory and `DateTime.now()` is banned outside `clock.now()`.
+
 
 ## The energy model (T3)
 

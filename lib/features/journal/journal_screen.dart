@@ -11,6 +11,7 @@ import '../../theme/typography.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
 import '../alchemy/alchemy_screen.dart';
+import '../reckoning/reckoning_screen.dart';
 import 'food_search_sheet.dart';
 import 'journal_providers.dart';
 import 'portion_sheet.dart';
@@ -33,6 +34,19 @@ class JournalScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Journal'),
         actions: [
+          IconButton(
+            tooltip: 'The Reckoning',
+            icon: const Icon(Icons.lock_outline),
+            color: Hue.gold,
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => Scaffold(
+                  appBar: AppBar(title: const Text('Week')),
+                  body: const SafeArea(child: ReckoningScreen()),
+                ),
+              ),
+            ),
+          ),
           IconButton(
             tooltip: 'Alchemy',
             icon: const Icon(Icons.science_outlined),

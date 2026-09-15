@@ -24,7 +24,12 @@ The app collects everything and reveals nothing directional until the week close
 
 Weight is still logged daily — only its interpretation is sealed. See
 [[02-Architecture]] for how `SealedValue<T>` makes this a compile-time property
-rather than a UI habit.
+rather than a UI habit, and how `RevealGate` decides when it lifts.
+
+> [!note] "Mon–Sat" is shorthand
+> The week-end day is chosen during character creation and can be any weekday.
+> The rule is *the six days before the chosen one*, not Monday to Saturday.
+> A closed week stays readable forever — history is a record, not a verdict.
 
 ## Why gamified, why Witcher
 
