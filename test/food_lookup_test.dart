@@ -19,9 +19,18 @@ const _now = '2026-09-15T10:00:00.000';
 /// most one network call ever, and that is a claim about how often this is
 /// reached, which no amount of checking the returned data would prove.
 class FakeRemote implements FoodRemote {
-  FakeRemote({this.byBarcodeResult, this.searchResult = const [], this.failure});
+  FakeRemote({
+    RemoteFood? byBarcodeResult,
+    ProductLookup? lookup,
+    this.searchResult = const [],
+    this.failure,
+  }) : lookup = lookup ??
+            (byBarcodeResult == null
+                ? const ProductUnknown()
+                : ProductFound(byBarcodeResult));
 
-  final RemoteFood? byBarcodeResult;
+  /// What a barcode lookup answers with.
+  final ProductLookup lookup;
   final List<RemoteFood> searchResult;
 
   /// When set, every call throws this instead of answering.
@@ -31,10 +40,10 @@ class FakeRemote implements FoodRemote {
   int searchCalls = 0;
 
   @override
-  Future<RemoteFood?> byBarcode(String barcode) async {
+  Future<ProductLookup> byBarcode(String barcode) async {
     barcodeCalls++;
     if (failure != null) throw failure!;
-    return byBarcodeResult;
+    return lookup;
   }
 
   @override
@@ -115,11 +124,12 @@ void main() {
       final remote = FakeRemote(byBarcodeResult: _remote());
       final container = containerWith(remote);
 
-      final food = await container.read(
+      final outcome = await container.read(
         barcodeLookupProvider('7622300336738').future,
       );
 
-      expect(food!.name, 'Own chocolate');
+      expect(outcome, isA<BarcodeFound>());
+      expect((outcome as BarcodeFound).food.name, 'Own chocolate');
       // The user's own correction wins. Going upstream here would quietly
       // replace it with whatever Open Food Facts says this week.
       expect(remote.barcodeCalls, 0);
@@ -129,11 +139,11 @@ void main() {
       final remote = FakeRemote(byBarcodeResult: _remote());
       final container = containerWith(remote);
 
-      final food = await container.read(
+      final outcome = await container.read(
         barcodeLookupProvider('7622300336738').future,
       );
 
-      expect(food!.name, 'Chocolate bar');
+      expect((outcome as BarcodeFound).food.name, 'Chocolate bar');
       expect(remote.barcodeCalls, 1);
     });
 
@@ -163,36 +173,95 @@ void main() {
       // A fresh container, as if the sheet were reopened: the saving is in the
       // library, not in the provider cache.
       final second = containerWith(remote);
-      final food = await second.read(
+      final outcome = await second.read(
         barcodeLookupProvider('7622300336738').future,
       );
 
-      expect(food!.name, 'Chocolate bar');
+      expect((outcome as BarcodeFound).food.name, 'Chocolate bar');
       expect(remote.barcodeCalls, 1);
     });
 
-    test('returns null when upstream has never heard of the barcode', () async {
+    test('says so when upstream has never heard of the barcode', () async {
       final container = containerWith(FakeRemote());
 
-      final food = await container.read(
+      final outcome = await container.read(
         barcodeLookupProvider('0000000000000').future,
       );
 
-      expect(food, isNull);
+      expect(outcome, isA<BarcodeUnknown>());
     });
 
-    test('surfaces an unreachable upstream as RemoteUnavailable', () async {
+    test('distinguishes a product it cannot use from one it cannot find',
+        () async {
+      // The old nullable return collapsed these two into one silent null, and
+      // the caller could only say "nothing happened". Both are recoverable, in
+      // different ways, and the user can only pick the right one if told which.
+      final container = containerWith(
+        FakeRemote(
+          lookup: const ProductUnusable(
+            UnusableReason.noEnergy,
+            name: 'Salted almonds',
+          ),
+        ),
+      );
+
+      final outcome = await container.read(
+        barcodeLookupProvider('7622300336738').future,
+      );
+
+      expect(outcome, isA<BarcodeUnusable>());
+      final unusable = outcome as BarcodeUnusable;
+      expect(unusable.reason, UnusableReason.noEnergy);
+      // Carried through so an offer to record it by hand can be prefilled.
+      expect(unusable.name, 'Salted almonds');
+      expect(await db.foodsDao.count(), 0);
+    });
+
+    test('reports an unreachable upstream instead of throwing', () async {
       final container = containerWith(
         FakeRemote(failure: const RemoteUnavailable('no connection')),
       );
 
-      await expectLater(
-        container.read(barcodeLookupProvider('7622300336738').future),
-        throwsA(isA<RemoteUnavailable>()),
+      final outcome = await container.read(
+        barcodeLookupProvider('7622300336738').future,
       );
+
+      expect(outcome, isA<BarcodeOffline>());
 
       // And nothing half-written was left behind.
       expect(await db.foodsDao.count(), 0);
+    });
+
+    test('an Error from upstream is an outcome, not an unhandled throw',
+        () async {
+      // Open Food Facts is crowd-sourced: a string where the schema says a
+      // number surfaces as a TypeError, which is not an Exception. One of
+      // those escaping is a failure with no output at all in a release build.
+      final container = containerWith(
+        FakeRemote(failure: TypeError()),
+      );
+
+      await expectLater(
+        container.read(barcodeLookupProvider('7622300336738').future),
+        throwsA(isA<TypeError>()),
+      );
+    });
+
+    test('never resolves to a food the user cannot see the reason for',
+        () async {
+      // The guarantee this whole type exists for: every path returns an
+      // outcome that says something, and the analyzer enforces the switch.
+      for (final remote in [
+        FakeRemote(byBarcodeResult: _remote()),
+        FakeRemote(),
+        FakeRemote(lookup: const ProductUnusable(UnusableReason.noName)),
+        FakeRemote(failure: const RemoteUnavailable('down')),
+      ]) {
+        final outcome = await containerWith(remote).read(
+          barcodeLookupProvider('7622300336738').future,
+        );
+        expect(outcome, isA<BarcodeOutcome>());
+      }
     });
   });
 

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:cal_tracker/data/remote/off_mapper.dart';
+import 'package:cal_tracker/data/remote/remote_food.dart';
 import 'package:cal_tracker/data/tables.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openfoodfacts/openfoodfacts.dart' as off;
@@ -10,6 +11,21 @@ import 'package:openfoodfacts/openfoodfacts.dart' as off;
 /// Going through `fromJson` rather than setting fields directly is the point:
 /// it exercises the same parsing the client does, so a change in how the
 /// package reads `nutriments` shows up here rather than on a phone.
+/// The mapped food, or null if the product was rejected.
+///
+/// Most tests here are about the mapping itself; which *reason* a rejection
+/// carries is asserted in its own group.
+RemoteFood? _map(off.Product product) {
+  final result = OffMapper.fromProduct(product);
+  return result is ProductFound ? result.food : null;
+}
+
+/// Why the mapper refused, or null if it did not.
+UnusableReason? _reason(off.Product product) {
+  final result = OffMapper.fromProduct(product);
+  return result is ProductUnusable ? result.reason : null;
+}
+
 off.Product _product({
   String? name = 'Rye bread',
   String? brands,
@@ -20,10 +36,15 @@ off.Product _product({
   String? servingSize,
   num? servingQuantity,
   String? imageSmallUrl,
+  Map<String, String> namesByLanguage = const {},
+  String? genericName,
 }) {
   return off.Product.fromJson({
     'code': barcode,
     'product_name': ?name,
+    for (final entry in namesByLanguage.entries)
+      'product_name_${entry.key}': entry.value,
+    'generic_name': ?genericName,
     'brands': ?brands,
     'nutriments': nutriments,
     'nova_group': ?novaGroup,
@@ -49,7 +70,7 @@ const _fullPanel = {
 void main() {
   group('OffMapper.fromProduct', () {
     test('maps a complete product', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(
           nutriments: _fullPanel,
           novaGroup: 3,
@@ -73,7 +94,7 @@ void main() {
     });
 
     test('sodium is converted from grams to milligrams', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(nutriments: _fullPanel),
       )!;
 
@@ -82,7 +103,7 @@ void main() {
     });
 
     test('falls back to salt when sodium is absent', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(
           nutriments: {
             'energy-kcal_100g': 250.0,
@@ -96,7 +117,7 @@ void main() {
     });
 
     test('derives kcal from kJ when only kJ is reported', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(nutriments: {'energy-kj_100g': 1046.0}),
       )!;
 
@@ -104,7 +125,7 @@ void main() {
     });
 
     test('prefers a reported kcal over the kJ conversion', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(
           nutriments: {'energy-kcal_100g': 240.0, 'energy-kj_100g': 1046.0},
         ),
@@ -114,7 +135,7 @@ void main() {
     });
 
     test('converts alcohol from percent by volume to grams', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(
           name: 'Lager',
           nutriments: {'energy-kcal_100g': 43.0, 'alcohol_100g': 5.0},
@@ -126,7 +147,7 @@ void main() {
     });
 
     test('leaves added sugar null when the field is absent', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(nutriments: _fullPanel),
       )!;
 
@@ -137,7 +158,7 @@ void main() {
     });
 
     test('ignores negative values from bad data entry', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(
           nutriments: {'energy-kcal_100g': 250.0, 'proteins_100g': -3.0},
         ),
@@ -147,7 +168,7 @@ void main() {
     });
 
     test('keeps only the first brand', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(nutriments: _fullPanel, brands: 'Hovis,Premier Foods'),
       )!;
 
@@ -155,7 +176,7 @@ void main() {
     });
 
     test('takes a serving weight as the piece weight', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(
           nutriments: _fullPanel,
           servingSize: '1 slice (40 g)',
@@ -169,7 +190,7 @@ void main() {
 
     test('drops a serving label that is only a measurement', () {
       // "2 30 g" would be a nonsense line in the Journal.
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(
           nutriments: _fullPanel,
           servingSize: '30 g',
@@ -182,7 +203,7 @@ void main() {
     });
 
     test('carries no glycemic index, because Open Food Facts has none', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(nutriments: _fullPanel),
       )!;
 
@@ -194,14 +215,14 @@ void main() {
         // Mapping this to 0 kcal would let someone believe they had logged
         // their lunch while adding nothing to the day.
         expect(
-          OffMapper.fromProduct(_product(nutriments: const {})),
+          _map(_product(nutriments: const {})),
           isNull,
         );
       });
 
       test('no name', () {
         expect(
-          OffMapper.fromProduct(
+          _map(
             _product(name: null, nutriments: _fullPanel),
           ),
           isNull,
@@ -210,8 +231,90 @@ void main() {
 
       test('a blank name', () {
         expect(
-          OffMapper.fromProduct(
+          _map(
             _product(name: '   ', nutriments: _fullPanel),
+          ),
+          isNull,
+        );
+      });
+
+      test('says which of the two it was', () {
+        // The caller has to tell these apart: a nameless product is one the
+        // user can name themselves, and one with no energy is not.
+        expect(
+          _reason(_product(name: null, nutriments: _fullPanel)),
+          UnusableReason.noName,
+        );
+        expect(
+          _reason(_product(nutriments: const {})),
+          UnusableReason.noEnergy,
+        );
+      });
+
+      test('a rejection for no energy still carries the name', () {
+        final result = OffMapper.fromProduct(
+          _product(name: 'Salted almonds', nutriments: const {}),
+        );
+
+        // So an offer to record it by hand starts from something.
+        expect(result, isA<ProductUnusable>());
+        expect((result as ProductUnusable).name, 'Salted almonds');
+      });
+    });
+
+    group('a name in any language beats no name at all', () {
+      // This is the bug behind a scan that resolved to nothing: `product_name`
+      // holds only the field for the language that was asked for, so a product
+      // named solely in Romanian arrived with it empty and was rejected.
+
+      test('falls back to a name in another language', () {
+        final food = _map(
+          _product(
+            name: null,
+            namesByLanguage: const {'ro': 'Migdale sărate'},
+            nutriments: _fullPanel,
+          ),
+        );
+
+        expect(food, isNotNull);
+        expect(food!.name, 'Migdale sărate');
+      });
+
+      test('prefers English when upstream has it', () {
+        final food = _map(
+          _product(
+            name: null,
+            namesByLanguage: const {
+              'ro': 'Migdale sărate',
+              'en': 'Salted almonds',
+            },
+            nutriments: _fullPanel,
+          ),
+        )!;
+
+        expect(food.name, 'Salted almonds');
+      });
+
+      test('falls back to the generic name before giving up', () {
+        final food = _map(
+          _product(
+            name: null,
+            genericName: 'Roasted nuts',
+            nutriments: _fullPanel,
+          ),
+        )!;
+
+        expect(food.name, 'Roasted nuts');
+      });
+
+      test('a blank name in another language is still no name', () {
+        expect(
+          _map(
+            _product(
+              name: null,
+              namesByLanguage: const {'ro': '   '},
+              nutriments: _fullPanel,
+            ),
           ),
           isNull,
         );
@@ -220,7 +323,7 @@ void main() {
 
     group('confidence reflects how complete the panel is', () {
       test('energy only scores lowest', () {
-        final food = OffMapper.fromProduct(
+        final food = _map(
           _product(nutriments: {'energy-kcal_100g': 250.0}),
         )!;
 
@@ -228,7 +331,7 @@ void main() {
       });
 
       test('a full panel scores highest', () {
-        final food = OffMapper.fromProduct(
+        final food = _map(
           _product(nutriments: _fullPanel),
         )!;
 
@@ -236,12 +339,12 @@ void main() {
       });
 
       test('a partial panel lands in between', () {
-        final sparse = OffMapper.fromProduct(
+        final sparse = _map(
           _product(
             nutriments: {'energy-kcal_100g': 250.0, 'proteins_100g': 9.0},
           ),
         )!;
-        final full = OffMapper.fromProduct(
+        final full = _map(
           _product(nutriments: _fullPanel),
         )!;
 
@@ -270,7 +373,7 @@ void main() {
 
   group('RemoteFood.toCompanion', () {
     test('carries the values across and encodes additives as JSON', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(
           nutriments: _fullPanel,
           novaGroup: 4,
@@ -292,7 +395,7 @@ void main() {
     });
 
     test('writes no additives JSON when there are none', () {
-      final food = OffMapper.fromProduct(
+      final food = _map(
         _product(nutriments: _fullPanel),
       )!;
 

@@ -1222,3 +1222,77 @@ it. The budget maths is unchanged.
 
 **Verified:** `flutter analyze` clean, 706 tests green — both unchanged, as they
 should be for a documentation commit.
+
+---
+
+## T16 — The barcode that answered nothing
+**Date:** 2026-09-15
+
+A scan of a packet of salted almonds read the code, closed the scanner, and
+added nothing — with no error either. Three separate faults, each of which
+would have hidden the other two. 706 → 720 tests.
+
+**The scanner was never the problem.** It read the barcode and returned it
+correctly. What failed was everything after, and the reason nothing was said is
+the sort of bug that survives a good test suite: `_say` posted a `SnackBar`
+through the root `ScaffoldMessenger`, which paints into the `JournalScreen`
+scaffold. The search sheet sits *above* that in the navigator and is opaque from
+48px to the bottom edge. Every message this sheet has produced since T4 was
+drawn underneath it.
+
+The error handling was written, it was correct, and it had nowhere to appear.
+The notice is now rendered inside the sheet, above the results, dismissible and
+cleared by the next keystroke. Reverting only that one method makes four of the
+five new widget tests fail, which is the check that the test is real.
+
+**Four outcomes were collapsed into one `null`.** `barcodeLookupProvider`
+returned `Food?` and threw `RemoteUnavailable`, so "upstream has never heard of
+this code", "upstream has it and it cannot be used", "the write-back failed" and
+"there is no network" all arrived as the same nothing. It now returns a sealed
+`BarcodeOutcome`, so `non_exhaustive_switch_*` makes the sheet say something
+true about each — the same enforcement the reveal gate uses, for the same
+reason. `OffMapper.fromProduct` returns a sealed `ProductLookup` under it, since
+only the mapper knows *why* it refused.
+
+**The mapper was rejecting real products as nameless.** This is what the almonds
+actually hit. `product_name` carries only the field for the language that was
+asked for, and the request pins English; a product named solely in Romanian
+arrives with it empty and was thrown away.
+
+Worth recording that the obvious fix is not enough: the package ships
+`getBestProductName`, but it too only ever looks at the one language it is
+given, so it returns empty for exactly this case. The fields request now asks
+for `NAME_ALL_LANGUAGES` and `GENERIC_NAME`, and when the package's own helper
+comes back empty the mapper falls back to a name in *any* language upstream has.
+A name in a language the user did not ask for is still the name on the packet in
+their hand.
+
+The no-energy rejection stays. Mapping a product with no energy figure to
+`kcal: 0` adds a silent zero to the day and the user believes they logged their
+lunch. But the refusal now carries the name upstream *did* give, so T19 can
+offer to record it by hand starting from something.
+
+**Two catches were letting failures escape entirely.** `_guard` caught only
+`Exception`, so a `TypeError` from crowd-sourced JSON — a string where the
+schema says a number — sailed straight past it, and `_scan` caught only
+`RemoteUnavailable`, so a database error from the write-back did too. In a
+minified release build, which is what ships, either one is a failure with no
+output at all. `_guard` now has a terminal `catch (e)`; catching `Error` is
+normally a bug worth crashing on, but upstream's data is not our invariant.
+
+**The scanner screen gained the feedback it never had.** A haptic tick on a
+successful read — without it, "the camera never read anything" and "it read
+something and the lookup found nothing" are the same experience. Also a
+`mounted` guard before popping, and `onDetectError` actually supplied: its
+default is a documented no-op, so a damaged or badly-lit label used to leave the
+preview running with nothing to show for it.
+
+**One design note.** `BarcodeScannerScreen.scan` is now behind
+`barcodeScannerProvider`, injected the same way as `foodRemoteProvider` and
+`imagePickerProvider`. A widget test has no camera, and without that seam the
+whole reporting path stays untestable — which is precisely how it came to be
+broken for four tasks. There is now a `test/food_search_sheet_test.dart`; the
+sheet had none at all.
+
+**Verified:** `flutter analyze` clean, 720 tests green, `flutter build apk
+--debug` succeeds. The scan itself is still a device question.

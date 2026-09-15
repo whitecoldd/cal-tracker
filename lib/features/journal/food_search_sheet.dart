@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database.dart';
 import '../../data/nutrition_adapter.dart';
-import '../../data/remote/food_remote.dart';
 import '../../data/remote/remote_food.dart';
 import '../../data/tables.dart';
 import '../../domain/day.dart';
@@ -18,7 +17,6 @@ import '../../theme/typography.dart';
 import '../../widgets/food_card.dart';
 import '../../widgets/ornate_panel.dart';
 import '../ai/ai_providers.dart';
-import 'barcode_scanner_screen.dart';
 import 'food_lookup_providers.dart';
 import 'journal_providers.dart';
 import 'photo_meal_sheet.dart';
@@ -67,6 +65,16 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
   /// user ends up logging the same thing twice.
   bool _busy = false;
 
+  /// What to tell the user about the last thing that did not work.
+  ///
+  /// Rendered inside this sheet rather than sent to a SnackBar. The sheet is
+  /// opaque from [Space.huge] to the bottom of the screen and sits above the
+  /// Journal in the navigator, and the root [ScaffoldMessenger] paints into the
+  /// Journal's scaffold — so every message this sheet has ever shown was drawn
+  /// underneath it. A scan that found nothing looked exactly like a scan that
+  /// did nothing.
+  String? _notice;
+
   @override
   void dispose() {
     _debounce?.cancel();
@@ -82,7 +90,14 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
     _debounce = Timer(
       const Duration(milliseconds: 250),
       () {
-        if (mounted) setState(() => _query = value);
+        if (mounted) {
+          setState(() {
+            _query = value;
+            // A message about the last scan has nothing to do with what is
+            // being typed now.
+            _notice = null;
+          });
+        }
       },
     );
   }
@@ -136,21 +151,39 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
   }
 
   Future<void> _scan() async {
-    final code = await BarcodeScannerScreen.scan(context);
+    final code = await ref.read(barcodeScannerProvider)(context);
     if (code == null || !mounted) return;
 
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _notice = null;
+    });
     try {
-      final food = await ref.read(barcodeLookupProvider(code).future);
+      final outcome = await ref.read(barcodeLookupProvider(code).future);
       if (!mounted) return;
-      if (food == null) {
-        _say('Nothing answers to that sigil. Search by name instead.');
-        return;
-      }
-      await _pick(food);
-    } on RemoteUnavailable {
-      if (mounted) {
-        _say('Unknown here, and the wider world is out of reach.');
+
+      // Every branch says something. The analyzer will not let a future
+      // outcome be added without one.
+      switch (outcome) {
+        case BarcodeFound(:final food):
+          await _pick(food);
+        case BarcodeUnknown():
+          _say(
+            'That sigil is in no ledger the app can reach. '
+            'Search for it by name instead.',
+          );
+        case BarcodeUnusable(:final name):
+          _say(
+            name == null
+                ? 'The ledger holds that sigil but names nothing and counts '
+                    'nothing. Search for it by name instead.'
+                : 'The ledger knows it as "$name" but records no energy for '
+                    'it. Logging it would add a silent zero to the day.',
+          );
+        case BarcodeOffline():
+          _say('Unknown here, and the wider world is out of reach.');
+        case BarcodeNotStored():
+          _say('The ledger answered, but it could not be written down.');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -158,12 +191,7 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
   }
 
   void _say(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, style: Type.prose(size: 13)),
-        backgroundColor: Hue.surfaceRaised,
-      ),
-    );
+    if (mounted) setState(() => _notice = message);
   }
 
   @override
@@ -246,6 +274,13 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                 Expanded(
                   child: CustomScrollView(
                     slivers: [
+                      if (_notice case final notice?)
+                        SliverToBoxAdapter(
+                          child: _Notice(
+                            message: notice,
+                            onDismiss: () => setState(() => _notice = null),
+                          ),
+                        ),
                       _SectionHeader(
                         label: searching ? 'IN THE LIBRARY' : 'EATEN LATELY',
                       ),
@@ -352,6 +387,46 @@ class _SectionHeader extends StatelessWidget {
           Space.sm,
         ),
         child: Text(label, style: Type.label(color: Hue.gold)),
+      ),
+    );
+  }
+}
+
+/// Something the user asked for did not work, said where they can see it.
+///
+/// The sheet's own channel for this. A SnackBar from here is painted into the
+/// Journal's scaffold, underneath this sheet, which is why a failed barcode
+/// scan used to look like nothing at all. Dismissible, and cleared by the next
+/// keystroke, so it never becomes furniture.
+class _Notice extends StatelessWidget {
+  const _Notice({required this.message, required this.onDismiss});
+
+  final String message;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Space.lg, 0, Space.lg, Space.sm),
+      child: OrnatePanel(
+        title: 'No answer',
+        accent: Hue.bloodRed,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(message, style: Type.lore(size: 12)),
+            ),
+            const SizedBox(width: Space.sm),
+            IconButton(
+              onPressed: onDismiss,
+              icon: const Icon(Icons.close, size: 16),
+              color: Hue.parchmentDim,
+              tooltip: 'Dismiss',
+              visualDensity: VisualDensity.compact,
+            ),
+          ],
+        ),
       ),
     );
   }
