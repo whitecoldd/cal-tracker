@@ -17,9 +17,11 @@ import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
 import '../../widgets/food_card.dart';
 import '../../widgets/ornate_panel.dart';
+import '../../widgets/witcher_button.dart';
 import '../ai/ai_providers.dart';
 import 'food_lookup_providers.dart';
 import 'journal_providers.dart';
+import 'manual_food_sheet.dart';
 import 'photo_meal_sheet.dart';
 import 'portion_sheet.dart';
 import 'speak_meal_sheet.dart';
@@ -67,6 +69,13 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
   /// user ends up logging the same thing twice.
   bool _busy = false;
 
+  /// A food the user could write down themselves, offered beside [_notice].
+  ///
+  /// Set when a scan ends without a food: there is a barcode, and often a
+  /// name, to start from. Refusing without offering the way forward is what
+  /// made a failed scan a dead end.
+  ({String? name, String? barcode})? _offerToWrite;
+
   /// What to tell the user about the last thing that did not work.
   ///
   /// Rendered inside this sheet rather than sent to a SnackBar. The sheet is
@@ -109,6 +118,7 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
       // A message about the last scan has nothing to do with what is being
       // typed now.
       _notice = null;
+      _offerToWrite = null;
     });
   }
 
@@ -171,6 +181,7 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
     setState(() {
       _busy = true;
       _notice = null;
+      _offerToWrite = null;
     });
     try {
       final outcome = await ref.read(barcodeLookupProvider(code).future);
@@ -185,18 +196,17 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
           // the search box is about something else.
           await _pick(food, carryQuantity: false);
         case BarcodeUnknown():
-          _say(
-            'That sigil is in no ledger the app can reach. '
-            'Search for it by name instead.',
-          );
+          _say('That sigil is in no ledger the app can reach.');
+          setState(() => _offerToWrite = (name: null, barcode: code));
         case BarcodeUnusable(:final name):
           _say(
             name == null
                 ? 'The ledger holds that sigil but names nothing and counts '
-                    'nothing. Search for it by name instead.'
+                    'nothing.'
                 : 'The ledger knows it as "$name" but records no energy for '
                     'it. Logging it would add a silent zero to the day.',
           );
+          setState(() => _offerToWrite = (name: name, barcode: code));
         case BarcodeOffline():
           _say('Unknown here, and the wider world is out of reach.');
         case BarcodeNotStored():
@@ -205,6 +215,24 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Records a food the app could not find, then logs it like any other.
+  Future<void> _writeByHand({String? name, String? barcode}) async {
+    final stored = await ManualFoodSheet.show(
+      context,
+      initialName: name ?? (barcode == null ? _parsed.words.join(' ') : null),
+      barcode: barcode,
+    );
+    if (stored == null || !mounted) return;
+
+    setState(() {
+      _notice = null;
+      _offerToWrite = null;
+    });
+    // A barcode names one product; a count typed in the search box is about
+    // something else. A name typed by hand is the thing being counted.
+    await _pick(stored, carryQuantity: barcode == null);
   }
 
   void _say(String message) {
@@ -298,7 +326,16 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                         SliverToBoxAdapter(
                           child: _Notice(
                             message: notice,
-                            onDismiss: () => setState(() => _notice = null),
+                            onWriteItDown: _offerToWrite == null
+                                ? null
+                                : () => _writeByHand(
+                                      name: _offerToWrite!.name,
+                                      barcode: _offerToWrite!.barcode,
+                                    ),
+                            onDismiss: () => setState(() {
+                              _notice = null;
+                              _offerToWrite = null;
+                            }),
                           ),
                         ),
                       _SectionHeader(
@@ -339,7 +376,12 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
   Widget _localSliver(AsyncValue<List<Food>> local, bool searching) {
     return switch (local) {
       AsyncData(:final value) when value.isEmpty =>
-        SliverToBoxAdapter(child: _Empty(searching: searching)),
+        SliverToBoxAdapter(
+          child: _Empty(
+            searching: searching,
+            onWriteItDown: searching && !_busy ? _writeByHand : null,
+          ),
+        ),
       AsyncData(:final value) => SliverList.separated(
           itemCount: value.length,
           separatorBuilder: (_, _) => const SizedBox(height: Space.sm),
@@ -421,10 +463,19 @@ class _SectionHeader extends StatelessWidget {
 /// scan used to look like nothing at all. Dismissible, and cleared by the next
 /// keystroke, so it never becomes furniture.
 class _Notice extends StatelessWidget {
-  const _Notice({required this.message, required this.onDismiss});
+  const _Notice({
+    required this.message,
+    required this.onDismiss,
+    this.onWriteItDown,
+  });
 
   final String message;
   final VoidCallback onDismiss;
+
+  /// Offered when there is something to write down — a scan that ended without
+  /// a food, which is the only case where the app knows a barcode nothing
+  /// answers to.
+  final VoidCallback? onWriteItDown;
 
   @override
   Widget build(BuildContext context) {
@@ -433,20 +484,33 @@ class _Notice extends StatelessWidget {
       child: OrnatePanel(
         title: 'No answer',
         accent: Hue.bloodRed,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
-              child: Text(message, style: Type.lore(size: 12)),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(message, style: Type.lore(size: 12)),
+                ),
+                const SizedBox(width: Space.sm),
+                IconButton(
+                  onPressed: onDismiss,
+                  icon: const Icon(Icons.close, size: 16),
+                  color: Hue.parchmentDim,
+                  tooltip: 'Dismiss',
+                  visualDensity: VisualDensity.compact,
+                ),
+              ],
             ),
-            const SizedBox(width: Space.sm),
-            IconButton(
-              onPressed: onDismiss,
-              icon: const Icon(Icons.close, size: 16),
-              color: Hue.parchmentDim,
-              tooltip: 'Dismiss',
-              visualDensity: VisualDensity.compact,
-            ),
+            if (onWriteItDown != null) ...[
+              const SizedBox(height: Space.sm),
+              WitcherButton(
+                label: 'RECORD IT YOURSELF',
+                icon: Icons.edit_outlined,
+                onPressed: onWriteItDown,
+              ),
+            ],
           ],
         ),
       ),
@@ -584,22 +648,41 @@ class _RemoteResult extends StatelessWidget {
   }
 }
 
+/// Nothing found. Never a dead end.
+///
+/// Until a food could be written down by hand this was the end of the road
+/// whenever there was no key and no network — which is exactly the situation
+/// the app is built to stay usable in.
 class _Empty extends StatelessWidget {
-  const _Empty({required this.searching});
+  const _Empty({required this.searching, this.onWriteItDown});
 
   final bool searching;
+  final VoidCallback? onWriteItDown;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(Space.xl),
-        child: Text(
-          searching
-              ? 'Nothing by that name in the library yet.'
-              : 'Nothing logged yet. Search for a food to begin.',
-          textAlign: TextAlign.center,
-          style: Type.lore(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              searching
+                  ? 'Nothing by that name in the library yet.'
+                  : 'Nothing logged yet. Search for a food to begin.',
+              textAlign: TextAlign.center,
+              style: Type.lore(),
+            ),
+            if (onWriteItDown != null) ...[
+              const SizedBox(height: Space.lg),
+              WitcherButton(
+                label: 'WRITE IT DOWN',
+                icon: Icons.edit_outlined,
+                onPressed: onWriteItDown,
+              ),
+            ],
+          ],
         ),
       ),
     );

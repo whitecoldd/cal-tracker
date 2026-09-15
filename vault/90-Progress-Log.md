@@ -1459,3 +1459,62 @@ something else.
 **Verified:** `flutter analyze` clean, 780 tests green. Whether the seed table
 actually contains a "fried egg" is a separate question — it does not, and T19's
 hand-written foods are the answer to that.
+
+---
+
+## T19 — Write it down yourself
+**Date:** 2026-09-15
+
+`FoodSource.manual` has been the top rung of `FoodsDao.upsert`'s trust ladder
+since T2, and nothing in the app could write it. The enum value existed, the
+precedence rule that protects it was written and tested, and there was no UI
+anywhere that produced one. 780 → 790 tests.
+
+The consequence was a dead end at exactly the moment the app is supposed to be
+at its most useful. Three of the four resolution steps can miss at once —
+nothing in the library, nothing in the seed table, no network or nothing
+upstream — and until now the fourth step, the user's own knowledge, had no way
+in. A packet in their hand, and the answer was "search by name instead".
+
+**Two entry points, both of which were previously terminal.**
+
+The search sheet's empty state, which is reached whenever there is no key and no
+network. That is not an edge case: it is the configuration the app is designed
+to remain fully usable in, and it was the one place where it was not.
+
+And T16's `BarcodeUnusable`, prefilled with whatever name upstream did give.
+This is why that refusal was made to carry the name rather than just a reason —
+"the ledger knows it as Salted almonds but records no energy for it" is a much
+better starting point than a blank field, and the row it writes keeps the
+barcode, so the scan that failed works from then on.
+
+**A hand-written row is permanently authoritative.** `upsert` already refuses to
+let a weaker source overwrite a stronger one, so a later Open Food Facts scan of
+the same barcode enriches nothing and replaces nothing. That rule now has a test
+that can actually reach it: write 600 kcal by hand, then upsert the same barcode
+from upstream at 123 kcal, and the row still reads 600 with one row in the table.
+Before this task that assertion could not have been written.
+
+The sheet passes an empty search key on purpose and lets `upsert` compute it —
+the same reason T4 put that rule there, and the reason a caller that normalised
+differently would silently insert a duplicate.
+
+**Kept deliberately small.** Name, brand, and the five figures on the front of a
+packet: energy, protein, carbohydrate, fat, fibre. Per 100 g, like everything
+else in the app. Sodium, sugar, NOVA group and additives are all absent, and
+that is the point — this is a form someone fills in standing in a kitchen with
+a packet, not a data-entry screen. Anything it does not capture can be corrected
+later through the same sheet, since a manual row may always be overwritten by
+another manual row.
+
+**Two test notes.** `scrollUntilVisible` needs the *sheet's* scrollable, not
+`find.byType(Scrollable).last` — a `TextField` has an internal scrollable of its
+own, and pointing at it drags something 38 pixels below the bottom of the
+screen. Targeting it as the ancestor of a heading unique to the sheet is stable
+in a way an index is not.
+
+And a `ListView` does not build what has not been scrolled to, so the submit
+button genuinely does not exist in the tree until then. Worth remembering: the
+failure reads like a missing widget, not like a scrolling problem.
+
+**Verified:** `flutter analyze` clean, 790 tests green.

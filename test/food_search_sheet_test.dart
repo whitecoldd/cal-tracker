@@ -265,4 +265,97 @@ void main() {
       expect(find.text('Borscht'), findsOneWidget);
     });
   });
+
+  group('nothing found is never a dead end', () {
+    // Before a food could be written down by hand, both of these were the end
+    // of the road -- and FoodSource.manual, the top rung of upsert's trust
+    // ladder, had nothing in the app that could write it.
+
+    testWidgets('a search with no results offers to record the food',
+        (tester) async {
+      await pump(tester);
+
+      await tester.enterText(find.byType(TextField), 'borscht');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(find.text('WRITE IT DOWN').hitTestable(), findsOneWidget);
+    });
+
+    testWidgets('and starts from what was typed', (tester) async {
+      await pump(tester);
+
+      await tester.enterText(find.byType(TextField), 'borscht');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('WRITE IT DOWN'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('WRITE IT DOWN YOURSELF'), findsOneWidget);
+      expect(find.widgetWithText(TextFormField, 'borscht'), findsOneWidget);
+    });
+
+    testWidgets('an unusable barcode offers it, prefilled with the name',
+        (tester) async {
+      await pump(
+        tester,
+        lookup: const ProductUnusable(
+          UnusableReason.noEnergy,
+          name: 'Salted almonds',
+        ),
+      );
+
+      await tester.tap(find.byTooltip('Scan a barcode'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('RECORD IT YOURSELF'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.widgetWithText(TextFormField, 'Salted almonds'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('a food recorded by hand is stored and offered for logging',
+        (tester) async {
+      await pump(tester, lookup: const ProductUnknown(), scanned: '5941234567890');
+
+      await tester.tap(find.byTooltip('Scan a barcode'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('RECORD IT YOURSELF'));
+      await tester.pumpAndSettle();
+
+      // Name first, then energy: the sheet's first two TextFormFields in order.
+      final fields = find.byType(TextFormField);
+      await tester.enterText(fields.at(0), 'Salted almonds');
+      await tester.enterText(fields.at(2), '600');
+      await tester.pumpAndSettle();
+
+      // The sheet is a ListView, so the button is not built until scrolled to.
+      await tester.scrollUntilVisible(
+        find.text('INSCRIBE'),
+        200,
+        scrollable: find
+            .ancestor(
+              of: find.text('PER 100 G OR 100 ML'),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('INSCRIBE'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+
+      final stored = await tester.runAsync(
+        () => db.foodsDao.findByBarcode('5941234567890'),
+      );
+      expect(stored, isNotNull);
+      expect(stored!.source, FoodSource.manual);
+    });
+  });
 }
