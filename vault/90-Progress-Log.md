@@ -302,3 +302,99 @@ section.
 
 **Verified:** `flutter analyze` clean, 144 tests green — no source changed,
 but the rule in §2 is the rule.
+
+---
+
+## T5 — Open Food Facts and barcodes
+**Date:** 2026-09-15
+
+Step three of the resolution order: a keyless Open Food Facts client, barcode
+scanning, and the write-back that keeps a food from ever costing a second
+lookup. 34 new tests, 178 in total. Detail in [[02-Architecture]].
+
+**`RemoteFood` is a different type from `Food`, and that is the design.** A
+`Food` has a row id and can be logged; a `RemoteFood` has none and cannot,
+because an entry referencing it would point at a row that does not exist. The
+only way across is `toCompanion()` plus a write to `foods` — which *is* the
+write-back the budget rule requires. I could have mapped straight to `Food`
+with a placeholder id and saved a file; that version has a path where an
+upstream result is shown, tapped, logged, and never persisted, and nothing but
+care would prevent it. Same move as `SealedValue`: make the wrong thing
+unwriteable rather than merely discouraged.
+
+**The mapper is pure, and that is where the bodies are buried.** Open Food
+Facts is crowd-sourced, so the interesting behaviour is entirely in fallbacks
+and unit conversions — and a live test would pin down none of it. Three
+conversions that would each have been a silent, plausible-looking bug:
+
+1. **Sodium is grams upstream, milligrams in our column.** A 1000x error that
+   looks like a perfectly ordinary number.
+2. **Alcohol is % by volume, not grams.** 5% lager is 3.9 g/100ml, not 5.
+3. **Energy is often only kJ.** 1046 kJ silently becoming 1046 kcal is a
+   four-fold overcount of a slice of bread.
+
+Plus the salt fallback — many products carry `salt` and no `sodium`, and salt is
+sodium x 2.5.
+
+**A product with no energy is rejected rather than mapped to zero.** Open Food
+Facts holds a great many entries that are barely more than a barcode and a
+photo. Offering one would let someone log their lunch, see it appear in the
+Journal, and add nothing to the day's total. A missing food is obvious; a food
+that reads 0 kcal is a lie the user cannot see. Same for a product with no name.
+
+`addedSugar` and `transFat` stay null when absent instead of defaulting to zero.
+"No added sugar" and "nobody filled this field in" are different claims, and T6's
+harm model needs to tell them apart — a defaulted zero would quietly exonerate
+every product with a thin record.
+
+**Confidence is computed from completeness**, 0.6 for energy-only up to 0.95 for
+a full panel, because that number is what decides whether a better source may
+later overwrite the row. A flat "it came from Open Food Facts" would let a
+one-field record outrank nothing and block nothing.
+
+**Failure is a footnote, not an error state.** Timeout, socket error, upstream
+throttling and malformed JSON all funnel into one `RemoteUnavailable`, and the
+search sheet renders it as a grey line under the local results. The app is
+required to stay fully usable with no network, and the honest way to express
+that is that the wider world is a bonus row, not a dependency. Local results
+paint immediately and are never blocked on the network — merging the two lists
+would have made every search as slow as the slowest one.
+
+**A scanned barcode checks the library first.** Not an optimisation: a barcode
+the user has scanned and then corrected by hand must resolve to their
+correction, not to whatever Open Food Facts says this week. There is a test that
+asserts the network is not touched at all in that case, because the guarantee is
+about the call count and no amount of checking the returned data would prove it.
+
+Scanner is restricted to EAN-13/8 and UPC-A/E — the formats actually printed on
+food packaging — so it cannot lock onto a QR code on the same label. It returns
+a `String?` and knows nothing about the food library; the caller owns the
+resolution order.
+
+**Both lookup providers are `autoDispose`.** The first version was not, and
+carried a `ref.keepAlive()` with a comment about holding results for the life of
+the sheet. Riverpod's own docs say plainly that `keepAlive()` **has no effect on
+a provider that is not auto-dispose** — so the call was dead code and the
+comment described behaviour that was not happening. What *was* happening: a
+`.family` keyed by query string, never disposed, caching every distinct string
+ever typed for the life of the app. For `barcodeLookupProvider` the stale cache
+would have been worse than a leak — it would survive a later hand-correction of
+that food and keep returning the row the user had replaced.
+
+> [!note] Two lessons, same shape
+> 1. The analyzer passed on `saveRemoteFood(Ref ref, ...)` being called with a
+>    `WidgetRef`. It did not — that was the compiler, on the next run. In
+>    Riverpod 2.x `WidgetRef` is not a `Ref`. CLAUDE.md §2 is right that the
+>    analyzer is not sufficient on its own; this is the third time.
+> 2. A no-op call with a confident comment is worse than no call, because the
+>    comment is what gets believed on the next read. Check that a lifecycle API
+>    applies to the provider kind you actually used.
+
+**Verified:** `flutter analyze` clean, 178 tests green,
+`flutter build apk --debug` succeeds — the first task to actually use
+`mobile_scanner`, and given this project's history with plugin builds, worth
+the minutes.
+
+**Not done here:** no golden for the search sheet's remote section. It renders
+network state, and a golden that needs a stubbed async frame to be stable is a
+flaky test wearing a useful disguise. The Journal golden still covers the card.

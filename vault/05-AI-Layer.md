@@ -29,6 +29,21 @@ Fall through on error, rate-limit, or timeout.
 Every AI resolution is written back to `foods`, so a food costs at most one
 call in its lifetime. This is what makes 50/day workable.
 
+Steps 1–2 shipped in T4, step 3 in T5 — see the remote-lookup section of
+[[02-Architecture]]. Step 3 writes back on the same terms as step 4, so by the
+time the model is reachable at all (T8), the common foods are already local and
+the budget is spent only on what genuinely needs it.
+
+> [!note] The write-back is enforced by a type, not by discipline
+> A food fetched upstream arrives as `RemoteFood`, which has no row id and
+> therefore cannot be logged. Turning it into something loggable *is* the write
+> to `foods`. There is no code path that shows an upstream result and then
+> forgets it.
+
+Two numbers guard the budget on the search path: nothing is fetched below three
+characters, and the query is debounced 250 ms, so typing a food name costs one
+request rather than one per keystroke.
+
 ## Rules
 
 - All calls use `response_format: {type: "json_schema"}` with a strict schema.

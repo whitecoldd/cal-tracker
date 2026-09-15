@@ -100,6 +100,79 @@ sedentary multiplier exactly, so the two paths agree for a sedentary user.
 Knowing your maintenance is knowing your body; printing it beside today's intake
 is handing over the verdict.
 
+## Remote food lookup (T5)
+
+Step three of the resolution order in [[05-AI-Layer]]. Free, keyless, and tried
+only after the local library and the seed table have both missed.
+
+```
+lib/data/remote/
+  remote_food.dart   a food found upstream, not yet in the library
+  off_mapper.dart    Open Food Facts product -> RemoteFood. Pure, no network
+  food_remote.dart   the FoodRemote interface + the Open Food Facts client
+```
+
+**`RemoteFood` is deliberately not `Food`.** A `Food` carries a real row id and
+can be logged; a `RemoteFood` cannot, because an entry referencing it would
+point at a row that does not exist. The only way across is `toCompanion()` plus
+a write to `foods` — which *is* the write-back the budget rule demands. The
+type system makes "show it, then forget it" impossible to write by accident,
+the same trick [[01-Vision]] uses for the blackout.
+
+**The mapper is pure so the awkward parts are testable.** Open Food Facts is
+crowd-sourced and its fields are inconsistent, so all the interesting behaviour
+is in fallbacks and unit conversions — and those are exactly what a live test
+would not pin down. Three that bite:
+
+| Field | Trap |
+|---|---|
+| Sodium | Reported in **grams**; the column is **mg**. Many products carry `salt` instead, which is sodium x 2.5 |
+| Alcohol | Reported as **% by volume**, not grams. Ethanol is 0.789 g/ml |
+| Energy | Often only `energy-kj`. 1 kcal = 4.184 kJ |
+
+**A product with no energy is rejected, not mapped to zero.** Open Food Facts
+holds many entries that are barely more than a barcode and a photo. Logging one
+as 0 kcal would let someone believe they had recorded their lunch while adding
+nothing to the day — worse than not offering the food at all. Same for a
+product with no name.
+
+`addedSugar` and `transFat` stay **null** when absent rather than defaulting to
+zero: "no added sugar" and "nobody filled this field in" are different claims,
+and the T6 harm model has to tell them apart.
+
+**Confidence reflects completeness**, from 0.6 for energy-only to 0.95 for a
+full panel. That number decides whether a later, better source may overwrite
+the row, so it has to mean "how much of this do we actually know" rather than
+just "it came from Open Food Facts".
+
+### Failing quietly
+
+Every network failure — timeout, socket, upstream throttling, malformed JSON —
+is funnelled into one `RemoteUnavailable`. The search sheet renders it as a
+footnote under the local results, never as an error state, because the app is
+fully usable with no network. Without the single type, the sheet would have to
+know about each failure mode separately, and the one it forgot would be the one
+that broke offline use.
+
+Search results appear **below** local ones. That is the resolution order made
+visible: something already on the device is the better answer, because the user
+has used or corrected it before.
+
+### Barcodes
+
+`mobile_scanner`, restricted to the formats actually printed on food packaging
+(EAN-13/8, UPC-A/E) so it cannot lock onto a QR code on the same label. The
+scanner screen returns a `String?` and knows nothing about the food library —
+the caller owns the resolution order.
+
+A scanned barcode checks the library **first**. This is not an optimisation: a
+barcode the user has already scanned and then corrected by hand must resolve to
+their correction, not to whatever Open Food Facts says this week.
+
+Camera permission is requested by the plugin itself — there is no
+`permission_handler` here (see below) — so a denial arrives as a
+`MobileScannerException`, handled in the scanner's `errorBuilder`.
+
 ## Durability — "survives reinstall"
 
 Two independent layers, because Android Auto Backup alone is not trustworthy
