@@ -53,6 +53,103 @@ request rather than one per keystroke.
   table and the cached library all work offline.
 - Key lives in `flutter_secure_storage`. Never in the repo, never in a fixture.
 
+## What shipped in T8
+
+```
+lib/data/ai/
+  ai_key_store.dart      the keystore, behind an interface
+  prompts.dart           every prompt, as pure functions
+  ai_schemas.dart        the strict JSON schemas
+  ai_decode.dart         reply -> the app's own types
+  openrouter_client.dart the chain, the budget, the recording
+  meal_resolver.dart     parsed items -> rows, with write-back
+lib/features/settings/
+  settings_screen.dart   key entry and today's allowance
+lib/features/journal/
+  speak_meal_sheet.dart  type a meal, confirm, log
+```
+
+Two of the four permitted uses are live: **free-text meal parsing** and
+**vague-portion estimation**. Photo→items is T9; the weekly narrative is T11.
+
+### The prompts are pure functions
+
+So the two rules that matter can be *tested* rather than merely intended.
+`test/ai_prompts_test.dart` asserts that no daily prompt contains `tdee`,
+`deficit`, `surplus`, `weight trend`, `bmr` — or even `kg`. A model cannot leak
+a figure it was never told, which is a stronger guarantee than asking it not to.
+
+The same test asserts every system prompt carries the "never diagnose" clause.
+It lives in one shared preamble precisely so a fifth use cannot be added
+without it.
+
+`test/openrouter_client_test.dart` then re-asserts the blackout **on the wire**:
+it serialises every request the fake adapter saw and scans that. A prompt
+builder that is clean but a call site that appends body data would pass the
+first test and fail the second.
+
+### One call per meal, not per food
+
+"two eggs, a slice of rye and a coffee" is a single request however many foods
+it names. That is the only thing that makes this affordable at fifty a day.
+
+### The resolution order is applied to the model's own output
+
+A parsed item is looked up in the library first. If it is there, the model's
+nutrients are **thrown away** and only its reading of the name and the portion
+survive — the device's own figures are better. If it is not there, the food is
+written with `FoodSource.ai`, the weakest source, so a later barcode scan or
+hand correction is allowed to overwrite it.
+
+Matching is by **exact search key**, not the `LIKE` search the food picker
+uses. A fuzzy match is right in a search box, where the user is looking at the
+results and picking one; here nothing would notice "rye bread" silently
+resolving to "rye bread crackers".
+
+> [!note] Open Food Facts is deliberately skipped on this path
+> It is a brand and barcode database, and a typed meal is almost entirely
+> generic foods, which the seed table already covers. A search per item would
+> add a round trip each for answers usually worse than the seed's. The barcode
+> path is where Open Food Facts earns its place.
+
+### The device beats the model on portions
+
+A food with a known piece weight resolves "2 eggs" more reliably than a
+language model does, and `portion.dart`'s unit table was written for exactly
+this. The model's gram figure is used **only** when the device has nothing
+better, and then capped below the exact units' confidence.
+
+### The budget is checked before the request
+
+Fifty a day is low enough that hitting the limit has to be something the app
+sees coming, not a surprise failure mid-meal. Every attempt is recorded
+including the failures, because OpenRouter charges the rate limit against the
+request and not the result.
+
+### Decoding is distrustful
+
+The schema is strict, but a model can return a number where the schema says
+number and have it be nonsense. So energy is clamped to 900 kcal/100 g (pure
+fat), a NOVA group outside 1–4 is *dropped* rather than clamped — clamping
+would assert a processing level the model never claimed — and a missing
+confidence reads as 0.5 rather than as certainty. A portion estimate is capped
+at 0.85 confidence whatever the model says: nobody weighed it.
+
+Two deliberate leniencies, both because a decode failure costs a call: a fenced
+```` ```json ```` block is unwrapped, and a numeric string is accepted. Past
+that, a malformed reply is a failure and the next model in the chain is tried.
+
+### The key
+
+Typed in Settings, straight into the Android keystore. Never rendered again —
+not even masked with a few characters showing, because there is nothing to
+check by eye and every rendering is a chance to put it in a screenshot. There
+is a test asserting the key does not appear in the widget tree.
+
+Validation is a **shape check** (`sk-or-` and a plausible length), not a
+network check: verifying against OpenRouter would spend one of fifty daily
+requests to learn what a prefix reveals.
+
 ## The four permitted uses
 
 1. **Free-text meal parsing** — "two eggs and a slice of rye" → structured items

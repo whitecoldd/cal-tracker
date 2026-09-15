@@ -17,10 +17,12 @@ import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
 import '../../widgets/food_card.dart';
 import '../../widgets/ornate_panel.dart';
+import '../ai/ai_providers.dart';
 import 'barcode_scanner_screen.dart';
 import 'food_lookup_providers.dart';
 import 'journal_providers.dart';
 import 'portion_sheet.dart';
+import 'speak_meal_sheet.dart';
 
 /// Picks a food to log.
 ///
@@ -112,6 +114,16 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
   }
 
   /// Scans a barcode and resolves it: library first, then upstream.
+  /// Hands off to the AI sheet, and closes this one if it logged anything.
+  Future<void> _speak() async {
+    final logged = await SpeakMealSheet.show(
+      context,
+      day: widget.day,
+      slot: widget.slot,
+    );
+    if (logged && mounted) Navigator.of(context).pop();
+  }
+
   Future<void> _scan() async {
     final code = await BarcodeScannerScreen.scan(context);
     if (code == null || !mounted) return;
@@ -190,7 +202,7 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: Space.sm),
+                      const SizedBox(width: Space.xs),
                       IconButton(
                         onPressed: _busy ? null : _scan,
                         tooltip: 'Scan a barcode',
@@ -198,6 +210,17 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                         color: Hue.gold,
                         disabledColor: Hue.parchmentFaint,
                       ),
+                      // Offered only when a key exists. A button that always
+                      // fails is worse than no button, and the app is fully
+                      // usable without one.
+                      if (ref.watch(aiAvailableProvider).valueOrNull ?? false)
+                        IconButton(
+                          onPressed: _busy ? null : _speak,
+                          tooltip: 'Describe the meal',
+                          icon: const Icon(Icons.auto_awesome),
+                          color: Hue.gold,
+                          disabledColor: Hue.parchmentFaint,
+                        ),
                     ],
                   ),
                 ),

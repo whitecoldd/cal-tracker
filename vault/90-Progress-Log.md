@@ -595,3 +595,89 @@ T7 is the gate and the seal.
 
 **Verified:** `flutter analyze` clean, 411 tests green, goldens regenerated and
 inspected, `flutter build apk --debug` succeeds.
+
+---
+
+## T8 — The OpenRouter client
+**Date:** 2026-09-15
+
+Secure key storage, the model fallback chain, strict JSON schemas, the budget
+counter, and the write-back. Two of the four permitted uses are live: free-text
+meal parsing and vague-portion estimation. 82 new tests, 493 in total. Detail in
+[[05-AI-Layer]].
+
+**The prompts are pure functions, so the rules can be tested rather than
+intended.** There is a test asserting no daily prompt contains `tdee`,
+`deficit`, `surplus`, `weight trend`, `bmr` — or even `kg`. A model cannot leak
+a figure it was never told, and that is a far stronger guarantee than asking it
+politely not to.
+
+Then a second test asserts the same thing **on the wire**: it serialises every
+request the fake adapter saw and scans that. A clean prompt builder with a call
+site that appends body data would pass the first and fail the second. The
+blackout is worth two tests.
+
+**Every system prompt carries the "never diagnose" clause**, from one shared
+preamble — so a fifth use cannot be added without it. §7 says harm is lore
+rather than medicine; this is where that reaches the model.
+
+**One call per meal, not per food.** "two eggs, a slice of rye and a coffee" is
+a single request however many foods it names. That is the whole reason this is
+affordable at fifty a day.
+
+**The resolution order is applied to the model's own output.** A parsed item is
+looked up locally first; if the library has it, the model's nutrients are
+*discarded* and only its reading of the name and portion survive. If not, the
+food is stored with `FoodSource.ai` — the weakest source — so a later barcode
+scan or hand correction may overwrite it.
+
+Matching is by exact search key, not the `LIKE` search the picker uses. Fuzzy
+is right in a search box where the user is looking at the results; here nothing
+would notice "rye bread" quietly resolving to "rye bread crackers" and the meal
+being logged against the wrong food.
+
+**Open Food Facts is skipped on this path, deliberately.** It is a brand and
+barcode database; a typed meal is almost all generic foods, which the seed
+table covers. A search per item would add a round trip each for answers usually
+worse than the seed's.
+
+**The device beats the model on portions.** A known piece weight resolves "2
+eggs" more reliably than a language model, and the unit table from T4 exists
+for exactly this. The model's gram figure is used only when nothing better is
+available, and then capped below the exact units' confidence.
+
+**Decoding is distrustful on purpose.** The schema is strict, but a model can
+return a number where the schema says number and have it be nonsense. Energy
+clamps at 900 kcal/100 g, which is pure fat. A NOVA group outside 1–4 is
+*dropped* rather than clamped — clamping would assert a processing level the
+model never claimed. A missing confidence reads as 0.5, not as certainty. A
+portion estimate is capped at 0.85 whatever the model says, because nobody
+weighed it and an estimate presenting itself as exact invites the user to stop
+correcting it.
+
+Two leniencies, both because a decode failure costs a call: a fenced ```json
+block is unwrapped, and a numeric string is accepted for a number field. Past
+that a malformed reply is a failure and the chain moves on.
+
+**The key is never rendered again.** Not even masked with a few characters
+showing: there is nothing to check by eye, and every rendering is a chance to
+put a credential in a screenshot. Validation is a shape check rather than a
+network check — asking OpenRouter whether the key works would spend one of
+fifty daily requests to learn what a prefix reveals.
+
+> [!note] A fake that lied
+> `InMemoryAiKeyStore` returned `''` for a blank key while `SecureAiKeyStore`
+> returned `null`. Both implement the same interface, and `hasKey` is
+> `read() != null` — so the fake reported a key present where the device would
+> report none. Caught by a test that was only meant to check trimming. A test
+> double that does not hold the real contract is worse than no double: it
+> passes on behaviour the phone does not have.
+
+**Verified:** `flutter analyze` clean, 493 tests green, goldens regenerated and
+inspected, `flutter build apk --debug` succeeds. No test in the suite reaches
+OpenRouter — the client is driven through a fake Dio adapter, because a real
+call would need a real key and would spend one of fifty daily requests per run.
+
+**Not done here:** photo→items (T9) and the weekly narrative (T11), the other
+two permitted uses. The prompt and schema for the narrative are written, since
+they belong with their siblings, but nothing calls them yet.

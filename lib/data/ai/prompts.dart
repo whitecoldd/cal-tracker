@@ -1,0 +1,100 @@
+/// Every prompt the app sends, as pure functions.
+///
+/// Pure so the two rules that matter most can be *tested* rather than merely
+/// intended:
+///
+/// - **No daily prompt is given verdict data.** A model cannot leak a figure it
+///   was never told, so TDEE, weight, weight trend and energy balance never
+///   appear in a prompt except the weekly narrative, which runs only on the
+///   reveal day. See CLAUDE.md §1.
+/// - **No prompt invites a diagnosis.** Harm is lore drawn from public data,
+///   never a claim about this person's body. See CLAUDE.md §7.
+library;
+
+import '../../domain/portion.dart';
+
+abstract final class Prompts {
+  /// Shared preamble. Every call carries it.
+  ///
+  /// The "never diagnose" clause lives here rather than in each prompt so a new
+  /// use cannot be added without it.
+  static const String _house = '''
+You are a nutrition data extractor inside an offline-first food tracker.
+
+Rules you must follow exactly:
+- Reply only with JSON matching the provided schema. Never add prose.
+- Use per-100g figures for nutrients, in grams, except energy in kcal and
+  sodium in milligrams.
+- If you are unsure of a value, give your best estimate and lower the
+  confidence. Never invent precision.
+- Never diagnose, warn about, or comment on the health of the person eating.
+  Do not describe food as healthy, unhealthy, good or bad. You are describing
+  food, not judging a person.
+- You are never told anything about the user's weight, body or energy needs,
+  and must not ask for them or speculate about them.''';
+
+  /// System prompt for turning a typed line into items.
+  static String mealParsingSystem() => '''
+$_house
+
+Task: split a line of everyday text into the foods it names.
+- Keep the user's own phrasing for each food name where it is a real food.
+- Prefer generic foods over brands unless a brand is named.
+- quantity/unit should mirror how the user said it: "two eggs" is
+  quantity 2, unit "piece". Only give grams when you are confident.
+- Put any fragment you cannot turn into a food into "unrecognised".''';
+
+  /// The user's line, as the model sees it.
+  static String mealParsingUser(String text) => 'Meal: $text';
+
+  /// System prompt for estimating what a vague portion weighs.
+  static String portionSystem() => '''
+$_house
+
+Task: estimate the weight in grams of a described portion of one food.
+- Answer for a typical adult serving as the phrase is ordinarily used.
+- confidence must be below 0.9: nobody weighed this.
+- note: one short clause saying what you assumed, for example
+  "a cupped handful, about 30 g".''';
+
+  /// The portion question, as the model sees it.
+  ///
+  /// Carries the food and the phrasing and **nothing else**. There is
+  /// deliberately no body mass, no goal and no daily total here: the answer is
+  /// a property of the food and the words, not of the person.
+  static String portionUser({
+    required String foodName,
+    required double quantity,
+    required PortionUnit unit,
+    double? gramsPerPiece,
+    String? pieceName,
+  }) {
+    final buffer = StringBuffer()
+      ..writeln('Food: $foodName')
+      ..writeln('Portion as described: $quantity ${unit.label}');
+
+    if (gramsPerPiece != null) {
+      final name = pieceName ?? 'piece';
+      buffer.writeln('One $name of this food weighs about ${gramsPerPiece}g.');
+    }
+
+    return buffer.toString().trim();
+  }
+
+  /// System prompt for the single weekly narrative.
+  ///
+  /// The **only** prompt permitted to receive verdict data, and only on the
+  /// reveal day. Everything else in this class is written so that a model
+  /// could not leak a trend if it wanted to, because it was never told one.
+  static String narrativeSystem() => '''
+$_house
+
+Exception to the rules above, for this task only: you are given the week's
+figures because the week has closed and the user is reading them now.
+
+Task: write a short account of the week in the voice of a witcher's journal.
+- Three to five sentences. No lists, no headings.
+- State what happened plainly. Do not congratulate or scold.
+- Do not give medical advice or predict health outcomes.
+- Do not suggest a target for next week.''';
+}
