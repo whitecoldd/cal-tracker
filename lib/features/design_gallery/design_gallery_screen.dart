@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../domain/rarity.dart';
 import '../../domain/sealed_value.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
@@ -174,6 +175,43 @@ class _DesignGalleryScreenState extends State<DesignGalleryScreen> {
               ],
             ),
           ),
+          const SizedBox(height: Space.md),
+          // The same primitive measuring composition rather than a quantity
+          // against a goal. This is the mode the Alchemy screen uses, because
+          // a macro target derived from expenditure could be subtracted back
+          // into a deficit. See CLAUDE.md §1.
+          const OrnatePanel(
+            title: 'Composition',
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                AlchemyVial(
+                  label: 'Protein',
+                  value: 0.26,
+                  target: 0.35,
+                  color: Hue.vitality,
+                  valueLabel: '26%',
+                  captionLabel: '10-35%',
+                ),
+                AlchemyVial(
+                  label: 'Carbs',
+                  value: 0.51,
+                  target: 0.65,
+                  color: Hue.stamina,
+                  valueLabel: '51%',
+                  captionLabel: '45-65%',
+                ),
+                AlchemyVial(
+                  label: 'Fat',
+                  value: 0.42,
+                  target: 0.35,
+                  color: Hue.adrenaline,
+                  valueLabel: '42%',
+                  captionLabel: '20-35%',
+                ),
+              ],
+            ),
+          ),
 
           _section('Signs'),
           OrnatePanel(
@@ -195,14 +233,14 @@ class _DesignGalleryScreenState extends State<DesignGalleryScreen> {
           _section('Food cards'),
           const FoodCard(
             name: 'Red lentils, dry',
-            rarity: Rarity.epic,
+            rarity: FoodRarity.epic,
             kcal: 352,
             detail: 'P 24g - C 60g - F 1g - Fibre 11g',
           ),
           const SizedBox(height: Space.sm),
           const FoodCard(
             name: 'Chicken breast, raw',
-            rarity: Rarity.rare,
+            rarity: FoodRarity.rare,
             kcal: 120,
             detail: 'P 23g - C 0g - F 3g',
           ),
@@ -210,7 +248,7 @@ class _DesignGalleryScreenState extends State<DesignGalleryScreen> {
           const FoodCard(
             name: 'Energy drink, 500ml',
             brand: 'Some Brand',
-            rarity: Rarity.common,
+            rarity: FoodRarity.common,
             kcal: 45,
             detail: 'Sugar 11g - Caffeine 160mg - NOVA 4',
             toxicity: 72,

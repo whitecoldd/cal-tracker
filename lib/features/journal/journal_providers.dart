@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/daos/journal_dao.dart';
 import '../../data/database.dart';
+import '../../data/nutrition_adapter.dart';
 import '../../data/tables.dart';
 import '../../domain/day.dart';
+import '../../domain/nutrition.dart';
 import '../../providers/app_providers.dart';
 
 /// The day the Journal is showing.
@@ -76,86 +78,51 @@ final journalDayViewProvider = Provider<AsyncValue<JournalDay>>((ref) {
 /// Deliberately absolute figures only. There is no target, no percentage and
 /// no remaining-calories number here: comparing intake against expenditure is
 /// the verdict, and the verdict waits for the week to close. See CLAUDE.md §1.
+///
+/// Since T6 the arithmetic lives in `domain/nutrition.dart`; this carries the
+/// result plus the one thing that is a storage concern rather than a
+/// nutritional one — how many entries rest on a vague portion.
 class DailyTotals {
   const DailyTotals({
-    required this.kcal,
-    required this.proteinG,
-    required this.carbsG,
-    required this.fatG,
-    required this.fibreG,
-    required this.sugarG,
-    required this.sodiumMg,
-    required this.glycemicLoad,
-    required this.itemCount,
+    required this.nutrients,
     required this.lowConfidenceCount,
   });
 
   factory DailyTotals.of(List<LoggedItem> items) {
-    var kcal = 0.0;
-    var protein = 0.0;
-    var carbs = 0.0;
-    var fat = 0.0;
-    var fibre = 0.0;
-    var sugar = 0.0;
-    var sodium = 0.0;
-    var load = 0.0;
     var vague = 0;
-
     for (final item in items) {
-      kcal += item.kcal;
-      protein += item.proteinG;
-      carbs += item.carbsG;
-      fat += item.fatG;
-      fibre += item.food.fibreG * item.portions;
-      sugar += item.sugarG;
-      sodium += item.sodiumMg;
-      load += item.glycemicLoad ?? 0;
       if (item.entry.confidence < 0.7) vague++;
     }
 
     return DailyTotals(
-      kcal: kcal,
-      proteinG: protein,
-      carbsG: carbs,
-      fatG: fat,
-      fibreG: fibre,
-      sugarG: sugar,
-      sodiumMg: sodium,
-      glycemicLoad: load,
-      itemCount: items.length,
+      nutrients: NutrientTotals.of(items.servings),
       lowConfidenceCount: vague,
     );
   }
 
   static const empty = DailyTotals(
-    kcal: 0,
-    proteinG: 0,
-    carbsG: 0,
-    fatG: 0,
-    fibreG: 0,
-    sugarG: 0,
-    sodiumMg: 0,
-    glycemicLoad: 0,
-    itemCount: 0,
+    nutrients: NutrientTotals.empty,
     lowConfidenceCount: 0,
   );
 
-  final double kcal;
-  final double proteinG;
-  final double carbsG;
-  final double fatG;
-  final double fibreG;
-  final double sugarG;
-  final double sodiumMg;
-
-  /// Sum of each item's glycemic load. Items with no GI contribute nothing,
-  /// which understates rather than invents.
-  final double glycemicLoad;
-
-  final int itemCount;
+  final NutrientTotals nutrients;
 
   /// How many entries rest on a vague portion ("a handful", "a plate").
   final int lowConfidenceCount;
+
+  double get kcal => nutrients.kcal;
+  double get proteinG => nutrients.proteinG;
+  double get carbsG => nutrients.carbsG;
+  double get fatG => nutrients.fatG;
+  double get fibreG => nutrients.fibreG;
+  double get sugarG => nutrients.sugarG;
+  double get sodiumMg => nutrients.sodiumMg;
+
+  /// Sum of each item's glycemic load. Items with no GI contribute nothing,
+  /// which understates rather than invents.
+  double get glycemicLoad => nutrients.glycemicLoad;
+
+  int get itemCount => nutrients.itemCount;
 }
 
 final dailyTotalsProvider = Provider<DailyTotals>((ref) {

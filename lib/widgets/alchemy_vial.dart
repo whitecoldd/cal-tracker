@@ -15,6 +15,8 @@ class AlchemyVial extends StatelessWidget {
     required this.target,
     required this.color,
     this.unit = 'g',
+    this.valueLabel,
+    this.captionLabel,
     this.width = 44,
     this.height = 92,
     super.key,
@@ -25,6 +27,18 @@ class AlchemyVial extends StatelessWidget {
   final double target;
   final Color color;
   final String unit;
+
+  /// Text under the label. Defaults to the value and its unit.
+  ///
+  /// Overridable because a vial does not always measure a quantity against a
+  /// goal: on the Alchemy screen it shows a macro's share of the day's own
+  /// energy, and "54g of 0g" would be both wrong and a progress framing the
+  /// daily screens must not carry. See CLAUDE.md §1.
+  final String? valueLabel;
+
+  /// The second line. Defaults to `of {target}{unit}`.
+  final String? captionLabel;
+
   final double width;
   final double height;
 
@@ -51,7 +65,7 @@ class AlchemyVial extends StatelessWidget {
         Text(label.toUpperCase(), style: Type.label()),
         const SizedBox(height: Space.xxs),
         Text(
-          '${value.round()}$unit',
+          valueLabel ?? '${value.round()}$unit',
           style: Type.prose(
             size: 13,
             weight: 600,
@@ -59,7 +73,7 @@ class AlchemyVial extends StatelessWidget {
           ),
         ),
         Text(
-          'of ${target.round()}$unit',
+          captionLabel ?? 'of ${target.round()}$unit',
           style: Type.prose(size: 11, color: Hue.parchmentFaint),
         ),
       ],

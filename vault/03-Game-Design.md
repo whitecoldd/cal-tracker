@@ -23,13 +23,41 @@ lore instead of judgement. See [[01-Vision]].
 The "little arbitrary values that improve or ruin the process". All computed in
 pure Dart in `domain/`, all visible daily (none of them leak the verdict).
 
-**Vitality** `0–100` — diet quality. Nutrient density, fibre, whole-food ratio,
-protein adequacy. The closest thing to a single "how well did I eat" score.
+**Vitality** `0–100` — diet quality. Four weighted components, all of them the
+day measured against itself or against body mass, so none can be solved back
+into an energy balance (T6):
 
-**Toxicity** `0–100` — accumulated harm. Additives / E-numbers, NOVA-4 count,
-trans and saturated fat, added sugar vs the WHO free-sugar limit, sodium vs
-2000mg, alcohol units. Drains slowly across days, like decoction toxicity, so a
-bad Friday still colours Saturday.
+| Component | Weight | Measured against |
+|---|---|---|
+| Fibre density | 30% | 14 g per 1000 kcal |
+| Whole food | 30% | share of energy from NOVA 1–2 |
+| Protein | 25% | 1.6 g per kg of body mass |
+| Sugar restraint | 15% | WHO free-sugar limit of 10% of energy |
+
+> [!warning] An unlogged day scores zero, not full marks
+> This is the trap the scoring is arranged around. A day with nothing logged
+> has no sugar, no sodium and no ultra-processed food, so every *restraint*
+> component would read perfect — making "don't log" the highest-scoring
+> strategy in the app. The one thing the app asks of the user is that they log
+> honestly, and the scoring must not quietly punish them for it.
+
+**Toxicity** `0–100` — accumulated harm. Additives / E-numbers, NOVA-4 share,
+trans and saturated fat, free sugar vs the WHO limit, sodium vs 2000 mg,
+alcohol units. Drains slowly across days, like decoction toxicity, so a bad
+Friday still colours Saturday.
+
+Carry-over retains **55%** of yesterday's figure before today's load is added —
+a half-life of a little over a day. A single indulgent evening should not be
+erased by the calendar turning over six hours later, but nor should it haunt a
+week, or the meter stops responding to what was actually eaten. History is
+folded over a 7-day window; beyond that the retained fraction is under a
+percent and invisible on the meter.
+
+Each reading contributes its weight scaled by severity, **capped at twice the
+guideline**. Without the cap one catastrophic figure — a 6,000 mg sodium day —
+saturates the meter alone and hides everything else; without allowing severity
+past 1.0 at all, three times the sodium guideline would read the same as
+reaching it.
 
 **Stamina** — activity against goal, from steps and distance.
 

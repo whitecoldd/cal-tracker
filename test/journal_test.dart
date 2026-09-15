@@ -1,4 +1,5 @@
 import 'package:cal_tracker/data/database.dart';
+import 'package:cal_tracker/data/nutrition_adapter.dart';
 import 'package:cal_tracker/data/tables.dart';
 import 'package:cal_tracker/domain/day.dart';
 import 'package:cal_tracker/domain/portion.dart';
@@ -142,6 +143,35 @@ void main() {
 
       final fields = DailyTotals.empty.runtimeType.toString();
       expect(fields, 'DailyTotals');
+    });
+  });
+
+  group('LoggedItem and the nutrition engine agree', () {
+    test('per-item figures match the domain Serving they adapt to', () async {
+      // The Journal shows each item's own kcal from `LoggedItem`, while the
+      // totals and every score go through `Serving`. Two pieces of arithmetic
+      // that must always give the same answer, so if one is ever changed
+      // without the other, a row and its own total will silently disagree.
+      final oats = await addFood(
+        'Oats',
+        kcal: 379,
+        protein: 13.2,
+        carbs: 67.7,
+        fat: 6.5,
+        gi: 55,
+      );
+      await log(oats, quantity: 80);
+
+      final item = (await db.journalDao.forDay(_today)).single;
+      final serving = item.serving;
+
+      expect(serving.kcal, closeTo(item.kcal, 0.0001));
+      expect(serving.proteinG, closeTo(item.proteinG, 0.0001));
+      expect(serving.carbsG, closeTo(item.carbsG, 0.0001));
+      expect(serving.fatG, closeTo(item.fatG, 0.0001));
+      expect(serving.sodiumMg, closeTo(item.sodiumMg, 0.0001));
+      expect(serving.glycemicLoad, closeTo(item.glycemicLoad!, 0.0001));
+      expect(serving.portions, closeTo(item.portions, 0.0001));
     });
   });
 

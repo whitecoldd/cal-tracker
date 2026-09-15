@@ -100,6 +100,71 @@ sedentary multiplier exactly, so the two paths agree for a sedentary user.
 Knowing your maintenance is knowing your body; printing it beside today's intake
 is handing over the verdict.
 
+## The scoring engine (T6)
+
+```
+lib/domain/
+  nutrition.dart   FoodPanel, Serving, NutrientTotals, MacroShare, GI/GL
+  harm.dart        HarmKind, HarmFlag, Toxins — the guideline readings
+  scoring.dart     Vitality, Toxicity (+ cross-day carry-over)
+  rarity.dart      FoodRarity and the ranking rule
+lib/data/
+  nutrition_adapter.dart   drift rows -> the pure types above
+lib/features/alchemy/
+  alchemy_providers.dart
+  alchemy_screen.dart      vials, meters, humours, curses
+```
+
+`domain/` must not import Flutter **or drift**, so the engine works on plain
+value types and `nutrition_adapter.dart` is the seam. That is what lets the
+whole of the maths be tested against hand-written fixtures with no database in
+the room — see `../test/nutrition_test.dart` and `../test/scoring_test.dart`.
+
+### The vials cannot take a target
+
+The hard constraint on this screen. A macro target derived from TDEE can be
+subtracted back into a deficit, so intake-against-target on a daily screen
+*is* the verdict, however it is dressed. See [[01-Vision]].
+
+So carbohydrate and fat fill against their share of the day's **own** energy,
+inside the published AMDR bands (carbs 45–65%, fat 20–35%, protein 10–35%).
+The vial answers "how was this day composed", never "was there enough of it".
+Protein additionally carries a g/kg adequacy mark and fibre a flat 30 g — both
+energy-independent, and body mass is legitimate because weight is logged and
+shown daily with only its *interpretation* sealed.
+
+`AlchemyVial` grew optional `valueLabel` / `captionLabel` for this. Its
+built-in caption is "of {target}", which is precisely the framing the daily
+screens must not carry.
+
+### Shares are taken against Atwater energy, not label energy
+
+`macroKcal` (4/4/9/7 per gram) rather than the food's stated `kcal`. Label
+energy and the Atwater sum routinely disagree by a few percent, and shares
+taken against a different denominator than their own numerators do not add up
+to 100 — which is visible and looks like a bug.
+
+### Unknown is not zero, and not a virtue
+
+Three places where the engine refuses to guess, all for the same reason:
+
+- **Free sugars and trans fat** stay null when absent. "No added sugar" and
+  "nobody filled this field in" are different claims, and a defaulted zero
+  quietly exonerates every product with a thin record.
+- **An unknown NOVA group** counts as neither whole food nor ultra-processed.
+  Every hand-typed food has no NOVA group; flattering it upward would make the
+  library look excellent, and condemning it would put a red mark on real food.
+- **Average GI** is weighted only over foods that actually carried an index.
+  Averaging across all carbohydrate would treat an unknown GI as zero and drag
+  the figure down, inventing a low-GI day out of missing data.
+
+### Rarity moved into `domain/`
+
+`FoodRarity` carries a name and no colour; the theme maps it to one. Before T6
+the enum lived in the widget layer and the ranking rule was copy-pasted at each
+call site, which is how the same food could read Epic in one list and Common in
+another. There is now exactly one `rankFood`.
+
 ## Remote food lookup (T5)
 
 Step three of the resolution order in [[05-AI-Layer]]. Free, keyless, and tried

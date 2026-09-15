@@ -398,3 +398,103 @@ the minutes.
 **Not done here:** no golden for the search sheet's remote section. It renders
 network state, and a golden that needs a stubbed async frame to be stable is a
 flaky test wearing a useful disguise. The Journal golden still covers the card.
+
+---
+
+## T6 — Alchemy and the scoring engine
+**Date:** 2026-09-15
+
+The nutrition engine, the harm model, Vitality, Toxicity, rarity, and the
+Alchemy screen they feed. 75 new tests, 253 in total. Detail in
+[[02-Architecture]] and [[03-Game-Design]].
+
+**The whole task turned on one question: what can a macro vial fill against?**
+A vial needs a reference, and the obvious reference — a macro target split out
+of the TDEE-derived calorie goal — is exactly the thing the app must not show.
+Sum the gaps between intake and a TDEE-derived target and you have the day's
+deficit; the daily screen would answer "am I losing weight?" by subtraction,
+whatever the label said.
+
+So carbohydrate and fat fill against their share of the day's **own** energy,
+inside the published AMDR bands. The vial says how the day was *composed*,
+never whether there was enough of it, and no arrangement of the numbers can be
+solved back into an energy balance. Protein additionally carries a g/kg
+adequacy mark and fibre a flat 30 g — both energy-independent. Body mass is
+legitimate here because weight is logged and shown every day; only its
+interpretation is sealed.
+
+`AlchemyVial` had to grow `valueLabel`/`captionLabel` for this. Its built-in
+second line is "of {target}", which is precisely the framing §1 forbids — and
+with a share passed in, it rendered "0 of 0".
+
+**An unlogged day scores zero Vitality, not full marks.** The trap the scoring
+is arranged around, and worth stating plainly: a day with nothing logged has no
+sugar, no sodium and no ultra-processed food, so every restraint component
+reads perfect. Score it naively and *not logging* becomes the highest-scoring
+strategy in the app. The one thing this app asks of the user is that they log
+honestly; the scoring must not quietly punish them for doing it.
+
+**Toxicity carries 55% of yesterday forward.** A half-life of a little over a
+day. Less and an indulgent evening is erased by the calendar turning over six
+hours later; more and it haunts a week and the meter stops responding to food.
+History folds over a 7-day window — beyond that the retained fraction is under
+a percent, which the meter cannot show anyway.
+
+The day's load caps each reading at **twice** its guideline. Without a cap, one
+catastrophic figure saturates the meter alone and hides everything else; without
+letting severity exceed 1.0 at all, three times the sodium guideline reads the
+same as reaching it. Both were wrong in different directions.
+
+**Unknown is not zero, in three places.** Free sugars and trans fat stay null
+when absent, because "no added sugar" and "nobody filled this in" are different
+claims and a defaulted zero exonerates every thin record. An unknown NOVA group
+counts as neither whole nor ultra-processed. Average GI is weighted only over
+foods that carried an index — averaging across all carbohydrate would treat
+unknown as zero and invent a low-GI day out of missing data.
+
+`LoggedItem` keeps its own per-item getters because the Journal shows each
+row's kcal, so the same multiplication now exists in two places. Rather than
+force a circular import to collapse them, there is a test asserting the two
+agree — if one is ever changed without the other, a row and its own total
+would silently disagree.
+
+**Rarity moved into `domain/`.** It was an enum in the widget layer carrying a
+colour, with the ranking rule copy-pasted at each call site — which is how the
+same food could read Epic in one list and Common in another. `FoodRarity` now
+carries a name, the theme maps it to a colour, and there is exactly one
+`rankFood`. `DailyTotals` likewise became a thin wrapper over the domain
+rollup rather than a second implementation of the same arithmetic.
+
+**The golden earned its keep again.** Rendering the screen and actually looking
+at it caught three things no test asserted:
+
+1. The Curses titles were steel on void and came out *dimmer than their own
+   detail text*, inverting the hierarchy — the name of the curse has to lead.
+   Not blood red either; T1 already found that unreadable as text on this
+   ground. They are parchment now, red only past the guideline.
+2. "SWEET ROT — 1 g — 0% of energy" was listed as a curse. Almost every real
+   food carries a trace of something, so `isNotable` now needs a twentieth of
+   the guideline rather than merely non-zero.
+3. The macro lines wrapped to two lines and centred against a one-line label,
+   which read as broken alignment. Fixed columns.
+
+> [!note] Two testing lessons
+> 1. **The widget test hung, exactly as CLAUDE.md §2 warns.** `toxicityProvider`
+>    and `latestWeightProvider` each await a drift query of their own, and a
+>    `testWidgets` body runs in fake async that never turns the real event
+>    loop — so `pumpAndSettle` spun for its full ten-minute timeout with no
+>    useful error. Overriding both with settled values fixed it. `runAsync`
+>    around the *setup* is not enough; anything the widget tree itself awaits
+>    has to be handed a value too.
+> 2. **A text-scraping blackout test must force the whole page into the tree.**
+>    The screen is a lazy `ListView`, so at phone height the lower panels are
+>    never built and the scrape passes by simply not looking at the half of the
+>    screen most likely to leak. The test now renders at 1080x7200. Raising it
+>    immediately caught two real `RenderFlex` overflows at 360 logical px.
+
+**Reachability:** an app-bar action on the Journal pushes Alchemy. A real
+navigation shell belongs with T12, when there are more screens than two to put
+in it.
+
+**Verified:** `flutter analyze` clean, 253 tests green, goldens regenerated and
+inspected, `flutter build apk --debug` succeeds.

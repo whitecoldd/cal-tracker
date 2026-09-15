@@ -4,10 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database.dart';
+import '../../data/nutrition_adapter.dart';
 import '../../data/remote/food_remote.dart';
 import '../../data/remote/remote_food.dart';
 import '../../data/tables.dart';
 import '../../domain/day.dart';
+import '../../domain/harm.dart';
+import '../../domain/nutrition.dart';
+import '../../domain/rarity.dart';
 import '../../providers/app_providers.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
@@ -359,30 +363,47 @@ class _Unreachable extends StatelessWidget {
   }
 }
 
-/// Rarity from processing level and nutrient density.
+/// One card, built from a nutrient panel.
 ///
-/// A first pass — T6 replaces this with the real scoring engine. It is here now
-/// because seeing quality *before* logging is the point of the card.
-///
-/// Shared by the local and upstream cards on purpose: the same food must not
-/// look Epic in the library and Common when fetched, or the rarity stops
-/// meaning anything.
-Rarity _rarityFor({int? nova, required double fibreG, required double proteinG}) {
-  final dense = fibreG >= 5 || proteinG >= 15;
+/// Both the library and the upstream card go through this, so the same food
+/// cannot read Epic in one list and Common in the other. Since T6 the ranking
+/// and the harm reading both come from `domain/`, which is the only place
+/// either rule is written down.
+class _PanelCard extends StatelessWidget {
+  const _PanelCard({
+    required this.name,
+    required this.panel,
+    required this.onTap,
+    this.brand,
+    this.dimmed = false,
+  });
 
-  return switch (nova) {
-    1 when dense => Rarity.epic,
-    1 => Rarity.rare,
-    2 => Rarity.rare,
-    _ => Rarity.common,
-  };
+  final String name;
+  final String? brand;
+  final FoodPanel panel;
+  final VoidCallback? onTap;
+
+  /// Upstream results are visibly secondary to what is already on the device.
+  final bool dimmed;
+
+  @override
+  Widget build(BuildContext context) {
+    final card = FoodCard(
+      name: name,
+      brand: brand,
+      rarity: rankFood(panel),
+      kcal: panel.kcal.round(),
+      detail: 'P ${panel.proteinG.round()}g · '
+          'C ${panel.carbsG.round()}g · '
+          'F ${panel.fatG.round()}g',
+      toxicity: readFoodToxins(panel).load,
+      onTap: onTap,
+    );
+
+    if (!dimmed && onTap != null) return card;
+    return Opacity(opacity: onTap == null ? 0.5 : 0.85, child: card);
+  }
 }
-
-/// Placeholder harm reading until the T6 harm model lands.
-double _toxicityFor(int? nova) => nova == 4 ? 55 : 0;
-
-String _macroLine(double protein, double carbs, double fat) =>
-    'P ${protein.round()}g · C ${carbs.round()}g · F ${fat.round()}g';
 
 class _Result extends StatelessWidget {
   const _Result({required this.food, required this.onTap});
@@ -392,17 +413,10 @@ class _Result extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FoodCard(
+    return _PanelCard(
       name: food.name,
       brand: food.brand,
-      rarity: _rarityFor(
-        nova: food.novaGroup,
-        fibreG: food.fibreG,
-        proteinG: food.proteinG,
-      ),
-      kcal: food.kcal.round(),
-      detail: _macroLine(food.proteinG, food.carbsG, food.fatG),
-      toxicity: _toxicityFor(food.novaGroup),
+      panel: food.panel,
       onTap: onTap,
     );
   }
@@ -421,23 +435,12 @@ class _RemoteResult extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      // Visibly secondary to the library results above, without inventing a
-      // second card style.
-      opacity: onTap == null ? 0.5 : 0.85,
-      child: FoodCard(
-        name: food.name,
-        brand: food.brand,
-        rarity: _rarityFor(
-          nova: food.novaGroup,
-          fibreG: food.fibreG,
-          proteinG: food.proteinG,
-        ),
-        kcal: food.kcal.round(),
-        detail: _macroLine(food.proteinG, food.carbsG, food.fatG),
-        toxicity: _toxicityFor(food.novaGroup),
-        onTap: onTap,
-      ),
+    return _PanelCard(
+      name: food.name,
+      brand: food.brand,
+      panel: food.panel,
+      onTap: onTap,
+      dimmed: true,
     );
   }
 }

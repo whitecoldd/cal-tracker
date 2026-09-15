@@ -2,23 +2,24 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../domain/rarity.dart';
 import '../theme/tokens.dart';
 import '../theme/typography.dart';
 
-/// How good a food is, as a collectable-card rarity.
+/// What each rarity looks like.
 ///
-/// Derived from NOVA group and nutrient density, so lentils outrank an energy
-/// drink without the app having to lecture anyone.
-enum Rarity {
-  common('Common', Hue.rarityCommon),
-  rare('Rare', Hue.rarityRare),
-  epic('Epic', Hue.rarityEpic),
-  relic('Relic', Hue.rarityRelic);
-
-  const Rarity(this.title, this.color);
-
-  final String title;
-  final Color color;
+/// The ranking itself is a nutrition judgement and lives in
+/// `domain/rarity.dart`; only the colour is the theme's business. Keeping the
+/// two apart is what stops the same food reading Epic in one list and Common
+/// in another, which is exactly what happened while the rule was duplicated at
+/// each call site.
+extension RarityColour on FoodRarity {
+  Color get color => switch (this) {
+        FoodRarity.common => Hue.rarityCommon,
+        FoodRarity.rare => Hue.rarityRare,
+        FoodRarity.epic => Hue.rarityEpic,
+        FoodRarity.relic => Hue.rarityRelic,
+      };
 }
 
 /// A Gwent-style card for one food.
@@ -39,7 +40,7 @@ class FoodCard extends StatelessWidget {
 
   final String name;
   final String? brand;
-  final Rarity rarity;
+  final FoodRarity rarity;
 
   /// Energy per 100g.
   final int kcal;

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
+import '../../domain/nutrition.dart';
 import '../database.dart';
 import '../tables.dart';
 
@@ -75,6 +76,28 @@ class RemoteFood {
 
   final FoodSource source;
   final double confidence;
+
+  /// The nutrient panel, for the scoring engine.
+  ///
+  /// An upstream result is ranked and read for harm by exactly the same code
+  /// as a stored one, so a food does not change rarity at the moment it is
+  /// saved.
+  FoodPanel get panel => FoodPanel(
+        kcal: kcal,
+        proteinG: proteinG,
+        carbsG: carbsG,
+        sugarG: sugarG,
+        addedSugarG: addedSugarG,
+        fatG: fatG,
+        satFatG: satFatG,
+        transFatG: transFatG,
+        fibreG: fibreG,
+        sodiumMg: sodiumMg,
+        alcoholG: alcoholG,
+        glycemicIndex: glycemicIndex,
+        novaGroup: novaGroup,
+        additiveCount: additives.length,
+      );
 
   FoodsCompanion toCompanion({required DateTime now}) {
     final stamp = now.toIso8601String();
