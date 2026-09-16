@@ -124,3 +124,61 @@ class WeightChart extends StatelessWidget {
     );
   }
 }
+
+/// What each day was made of, 0..100.
+///
+/// Seven bars, one per day, with unlogged days drawn as a dim stub rather than
+/// skipped: a gap in the week is a fact about it, and a chart that silently
+/// closed up would make four logged days look like seven.
+///
+/// Not sealed, and it cannot be — Vitality is a composition score, shown on
+/// Alchemy every day, and no arrangement of these bars says which way the
+/// scale went.
+class VitalityChart extends StatelessWidget {
+  const VitalityChart({required this.scores, super.key});
+
+  /// Seven entries, oldest first. Null is a day that was never written down.
+  final List<double?> scores;
+
+  @override
+  Widget build(BuildContext context) {
+    if (scores.every((s) => s == null)) {
+      return Text('No days to plot.', style: Type.lore(size: 12));
+    }
+
+    return SizedBox(
+      height: 120,
+      child: BarChart(
+        BarChartData(
+          alignment: BarChartAlignment.spaceAround,
+          minY: 0,
+          maxY: 100,
+          barTouchData: const BarTouchData(enabled: false),
+          borderData: FlBorderData(show: false),
+          titlesData: const FlTitlesData(show: false),
+          gridData: const FlGridData(
+            show: true,
+            drawVerticalLine: false,
+            horizontalInterval: 50,
+          ),
+          barGroups: [
+            for (var i = 0; i < scores.length; i++)
+              BarChartGroupData(
+                x: i,
+                barRods: [
+                  BarChartRodData(
+                    // A stub for an unlogged day, so the gap is visible
+                    // without pretending to a score.
+                    toY: scores[i] ?? 3,
+                    width: 14,
+                    borderRadius: BorderRadius.zero,
+                    color: scores[i] == null ? Hue.steelDim : Hue.toxicity,
+                  ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}

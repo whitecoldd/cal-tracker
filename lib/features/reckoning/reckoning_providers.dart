@@ -179,6 +179,35 @@ final weekArchiveProvider = Provider<WeekArchive>(
 ///
 /// Sealing on open is the only sensible trigger: there is no background job in
 /// a serverless app, so a week closes when the user comes to read it. The
+/// Which reading of the week the screen is showing.
+enum ReckoningMode {
+  tally('The Tally', 'The week in figures.'),
+  tale('The Tale', 'The week in words.');
+
+  const ReckoningMode(this.label, this.lore);
+
+  final String label;
+  final String lore;
+}
+
+/// The chosen reading. **Not persisted.**
+///
+/// A stored view preference is a schema version for a cosmetic, which is the
+/// same call `LevelUpMark` already makes about its replay flag. It lives in a
+/// provider rather than in the widget so a golden can be taken of either mode
+/// without tapping anything.
+final reckoningModeProvider =
+    NotifierProvider<ReckoningModeNotifier, ReckoningMode>(
+  ReckoningModeNotifier.new,
+);
+
+class ReckoningModeNotifier extends Notifier<ReckoningMode> {
+  @override
+  ReckoningMode build() => ReckoningMode.tally;
+
+  void select(ReckoningMode mode) => state = mode;
+}
+
 /// The week's descriptive half — live, for any week, on any day.
 ///
 /// Deliberately does **not** watch [weekReckoningProvider]: the open half must

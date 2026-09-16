@@ -5,7 +5,7 @@ whether you are losing or gaining weight until the week is over.**
 
 Personal, serverless, offline-first. All data lives on the phone.
 
-**Version 1.0.0 — "First Contract", the first stable release.** Versioning
+**Version 1.1.0 — "The Reckoning Remade".** Versioning
 scheme and release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ---
@@ -20,8 +20,10 @@ So this app collects everything and reveals nothing directional until week's end
 
 - **Every day except the last** — calories, macros, glycemic load, toxicity,
   steps, streak. Enough to make decisions, useless for guessing the trend.
-- **Week's End** — energy balance, weight delta, projection, body-composition
-  estimate, and a written account of the week.
+- **Week's End** — read as **The Tally** (figures) or **The Tale** (prose).
+  The curses the week carried, the E-numbers eaten, what it held and what it
+  carried — readable any day. Energy balance, weight delta, projection and
+  body composition wait for the week to close.
 
 Weight is still logged every day. Only its *interpretation* is sealed, and that
 seal is enforced by the type system, not by UI discipline: verdict values cross
@@ -152,7 +154,7 @@ read the Markdown on GitHub. [`00-Index`](vault/00-Index.md) is the way in;
 task, with the reasoning.
 
 ```bash
-flutter analyze && flutter test          # 1003 tests
+flutter analyze && flutter test          # 1017 tests
 flutter test --update-goldens --tags golden   # after a deliberate visual change
 ```
 

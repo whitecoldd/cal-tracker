@@ -15,10 +15,10 @@
 library;
 
 /// The semantic version, without the build number.
-const String appVersion = '1.0.7';
+const String appVersion = '1.1.0';
 
 /// The Android `versionCode`. Monotonic, one per released version.
-const int appBuild = 8;
+const int appBuild = 9;
 
 /// What `pubspec.yaml` says, in full.
 const String appVersionFull = '$appVersion+$appBuild';
@@ -28,4 +28,4 @@ const String appVersionFull = '$appVersion+$appBuild';
 /// Flavour, not identity — nothing keys off it. It exists because "1.0.0" says
 /// nothing about what a release *was*, and the vault and the changelog both
 /// want a handle for it.
-const String appReleaseName = 'First Contract';
+const String appReleaseName = 'The Reckoning Remade';

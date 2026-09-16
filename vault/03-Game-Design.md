@@ -183,6 +183,26 @@ Drawn from Open Food Facts fields plus the nutrition engine:
 
 Rendered as "curses" and "toxins" with an explanation on tap.
 
+### The weekly report (T34–T41, v1.1.0)
+
+Week's End has two readings, chosen with `RunicTabs`:
+
+- **The Tally** — the week in figures: composition, the week's curses with the
+  foods that carried them, the E-numbers themselves, tendencies in both tones,
+  and the days.
+- **The Tale** — the week in words, in four sections. Written by a model once
+  at the seal, or by the app from the same figures when there is no key.
+
+**The split that matters.** The descriptive half is readable on *any* day,
+because none of it says which way the scale went — it is the same material
+Alchemy already shows daily, aggregated. The verdict half is unchanged.
+
+The open half states **no quantity of energy and no weight**: shares,
+densities and counts of days. A weekly intake in kcal, read by someone who
+knows their own expenditure, is the verdict with the subtraction done in their
+head. Enforced by `WeekPattern` having no field for one — see
+`../lib/domain/week_pattern.dart`.
+
 > [!warning] Standing disclaimer
 > Every harm surface must display: **lore, not a physician — not medical advice.**
 > No harm flag may be phrased as a diagnosis, and the AI system prompt says so

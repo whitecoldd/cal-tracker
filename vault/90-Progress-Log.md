@@ -2775,3 +2775,74 @@ row, still swallows `AiFailure` to null, still never retries. The
 untouched and green.
 
 **Verified:** `flutter analyze` clean, 1003 tests green.
+
+## T41 — The Reckoning remade: The Tally and The Tale
+**Date:** 2026-09-16
+**Version:** 1.1.0+9 — the first MINOR release.
+
+The eighth and last task of the series. Week's End is a weekly report now.
+1003 → 1017 tests.
+
+**The spine never moves.** Week bar, then the verdict panel, then the switch.
+Only what hangs below the switch changes. A mode that could hide *whether* the
+week is sealed would be a far worse failure than showing the wrong tab, so the
+seal is above the switch and not inside either view.
+
+**The file split was not optional.** `reckoning_screen.dart` was 535 lines and
+would have passed 1,500. It is now the shell (~140), `verdict_panels.dart`
+(~350, everything that waits for the week to close), `tally_view.dart` (~500)
+and `tale_view.dart` (~180).
+
+**The narrowed test is the most important edit in this task, so it is written
+down twice — here and in the test.** `reckoning_screen_test.dart` asserted
+that no `Text` anywhere in the sealed tree matched
+`[+-]?\d+([.,]\d+)?\s*(kcal|kg|%)`. The Tally prints `34%` macro shares and
+`14 g per 1000 kcal`, so that assertion could not survive the feature — and
+the tempting response was to delete it.
+
+It was narrowed in two directions instead, and both are strictly enforced:
+
+1. The `%` regex is **scoped to `VerdictPanel`**, the widget that actually owns
+   the verdict. A macro share is a composition of the week's own energy and
+   cannot be rearranged into a balance.
+2. The whole-tree sweep is **kept** in the form that still holds: no *signed*
+   kcal figure and no weight in kilograms, anywhere, in **either** mode.
+3. The word-level loop is kept whole, with the two density units stripped
+   first — the rule T36 established. `kcal` and `kg` are still forbidden
+   across the entire screen everywhere they are not a unit of density.
+
+The net guard is stronger than before, because it now runs in both modes.
+
+**One attack test.** The Tale is handed an archived week containing the word
+"kcal" on a Tuesday, through a deliberate provider override, and must still
+show nothing. A screen that gates on whether its provider happened to return
+something is one bad override away from printing a verdict mid-week; this one
+gates on `reckoning.isRevealed`.
+
+**Three faults the goldens caught that no test would have.**
+
+1. The curse name was printed twice — once as a `StatBar` label and once as
+   the `CurseLine` title. The bar moved into the line's trailing slot.
+2. `13614 mg` — five digits with no separators, which a person has to count
+   the columns of. `formatAmount` now groups thousands.
+3. **`Carried by Salt pork (3,024 )`** — an unlabelled number that was
+   *kilocalories* of ultra-processed food. It slipped past every leak test
+   precisely because the empty unit meant the string never contained "kcal".
+   Ultra-processed and additive carriers now name the food and stop. This is
+   the best argument in the whole series for rendering the goldens and
+   actually looking at them.
+
+**A spinner nearly cost an afternoon.** The first loading state was a
+`CircularProgressIndicator`, which animates for ever, so `pumpAndSettle` never
+settled and every widget test on the screen timed out with no useful error —
+the same fault CLAUDE.md §2 records from T21, reached by a different road. It
+is a static line of lore now.
+
+**Mode is not persisted.** A stored view preference is a schema version for a
+cosmetic, which is the call `LevelUpMark` already makes about its replay flag.
+
+**Verified:** `flutter analyze` clean, 1017 tests green. Four reckoning
+goldens: `reckoning_sealed`, `reckoning_revealed`, `reckoning_tale` and
+`reckoning_tale_sealed` — the last because it is the state nobody will look at
+on a device and the one most likely to read as broken rather than as
+deliberately locked. No plugin added, so no APK build.

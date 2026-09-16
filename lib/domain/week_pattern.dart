@@ -696,8 +696,25 @@ String _curseDetail({
         'across the week.';
   }
 
-  final figure = total >= 100 ? total.round().toString() : total.toStringAsFixed(1);
-  return '$head. $figure $unit across the week.';
+  return '$head. ${formatAmount(total)} $unit across the week.';
+}
+
+/// A figure with thousands separated, and no false precision.
+///
+/// A week of sodium runs to five digits, and `13614 mg` is a number a person
+/// has to count the columns of before they can read it.
+String formatAmount(double value) {
+  if (value < 100) return value.toStringAsFixed(1);
+
+  final digits = value.round().toString();
+  final buffer = StringBuffer();
+
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) buffer.write(',');
+    buffer.write(digits[i]);
+  }
+
+  return buffer.toString();
 }
 
 List<AdditiveTally> _additives(List<LoggedPortion> portions) {

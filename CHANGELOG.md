@@ -23,6 +23,50 @@ its line to it.
 
 ---
 
+## 1.1.0+9 — The Reckoning Remade
+
+**The first MINOR release.** Week's End is a weekly report now, not a page of
+energy balance.
+
+### Two readings
+
+- **The Tally** — the week in figures.
+- **The Tale** — the week in words.
+
+The week bar and the verdict panel sit above the switch and never move, so a
+mode can never hide *whether* the week is sealed.
+
+### What The Tally says
+
+- **The table** — how the week was composed, fibre density, protein per kg,
+  whole-food share, glycemic index.
+- **The week's curses** — each harm across the week: how many days it passed
+  its guideline, the amount, the public figure it is measured against, and
+  **which foods carried it**, ranked by the portion actually eaten.
+- **Alchemical residue** — the E-numbers themselves, with how many days each
+  appeared and which food listed it. The panel this release was asked for.
+- **Tendencies** — what the week held and what it carried, at most three of
+  each, so a bad week is still credited and a good one is still honest.
+- **The days** — each day's composition score, the Signs across the week,
+  steps and water.
+
+### Readable before the reveal
+
+Curses, composition, additives and tendencies are readable on any day, because
+none of them says which way the scale went. Energy balance, weight, trend,
+projection and body fat stay sealed exactly as before.
+
+The open half states **no quantity of energy and no weight** — shares,
+densities and counts of days only. A weekly intake figure, read by someone who
+knows their own expenditure, is the verdict with the subtraction done in their
+head.
+
+### The Tale
+
+Four sections, written once by a model at the seal where there is a key, and
+by the app from the same figures where there is not — so the mode is never an
+empty panel. Mid-week it gives the descriptive passages and seals the rest.
+
 ## 1.0.7+8 — Give the account something to account for
 
 - The weekly narrative now sees what was eaten: composition, curses with the

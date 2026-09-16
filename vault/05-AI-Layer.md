@@ -219,6 +219,38 @@ progress, whatever a comment says.
 Same shape as `RevealGate.gate` taking a callback: the wrong thing is made
 unwriteable rather than discouraged.
 
+**Widened in T40 and still the guard.** It now also carries a `WeekPattern`
+and its findings, so the account can describe what was actually eaten. That
+does not weaken it: the null-check is on the `Reckoning`, and a `WeekPattern`
+has no verdict field, so nothing in the descriptive half can forge a revealed
+week.
+
+### Four sections since T40
+
+The reply is `{opening, the_table, the_curses, the_boons}` rather than one
+paragraph, because The Tale lays them out as separate panels. There is
+deliberately no `closing`: that is exactly where a model reaches for "next
+week, try…", which §7 forbids, and the app supplies its own closing in the
+disclaimer.
+
+Four and not more because `_structured` records **every** attempt against the
+daily cap, and each extra required string is another chance a free model trips
+`strict`. If they start failing in practice, collapse to two rather than retry.
+
+Still one call a week. The prompt is capped — five curses, ten additive codes,
+three findings per tone — so it cannot grow with the size of the food library.
+
+**No migration.** The tale is `jsonEncode`d into the existing
+`weeks.narrative` column, and `WeeklyTale.decode` reads a 1.0.x plain
+paragraph as a single section.
+
+### When no model wrote it
+
+The app writes the same four sections itself, from the same figures
+(`tellWeek` in `../lib/domain/weekly_tale.dart`), and says so in one dim line.
+§4 requires the app stay fully usable without AI, and a permanently empty
+second mode would pass that in letter and fail it in spirit.
+
 ### One call, once, per week
 
 | Situation | What happens |
