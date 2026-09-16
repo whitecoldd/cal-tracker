@@ -2096,3 +2096,51 @@ endpoints.
 really carries `is_free_tier` is the one thing no test here can settle — the
 fake is our description of the wire, not theirs. It fails safe either way: an
 unrecognised reply leaves the cap where it was.
+
+---
+
+## T28 — The build command T23 got wrong
+**Date:** 2026-09-16
+
+T23 changed the README to `flutter build apk --release --target-platform
+android-arm64`, on the reasoning that arm64 is the only target so there is
+nothing to gain from building the other two. The reasoning was right and the
+command does not do it.
+
+T26 ran that command for the first time and the APK came out at 41.3 MB —
+essentially the same as the three-ABI build it replaced. Opening it:
+
+| ABI folder | `libapp.so` | libraries |
+|---|---|---|
+| `arm64-v8a` | yes | 8 |
+| `armeabi-v7a` | **no** | 6 |
+| `x86_64` | **no** | 6 |
+
+**`--target-platform` decides what Dart is compiled for, not what is packaged.**
+Only arm64 carries `libapp.so`, so the app genuinely runs on one ABI — but the
+plugin libraries for the other two are still in the file, because they arrive
+from AARs and nothing asked Gradle to drop them. `check_apk_libs.py` has said
+this all along, in the comment explaining why it keys on `libflutter.so` rather
+than on plugin `.so` files: *"they arrive from AARs that ship ABIs the app
+itself was never built for."* The evidence for this mistake was written down in
+T22, four commits before the mistake was made.
+
+`--split-per-abi --target-platform android-arm64` builds **one** APK containing
+only arm64, at 28.9 MB — 12 MB smaller, and what T23 meant to say. Both figures
+measured, not estimated.
+
+**`check_apk_libs.py` would have quietly stopped checking anything.** Its
+default was the single path `app-release.apk`, which `--split-per-abi` never
+writes; it reports a missing file as a failure, so the corrected command would
+have failed the check on a file that was never supposed to exist. It now looks
+for every release APK a documented command can produce, checks the ones that are
+there, and fails only when none is.
+
+**The lesson worth keeping.** T23's own entry is about a README that described a
+build sequence nobody had run. The fix asserted a different sequence — also
+without running it. A build command in a document is a claim about a binary, and
+the only way to check a claim about a binary is to open the binary.
+
+**Verified:** both commands run, both APKs opened and their ABI folders listed.
+`python tools/check_apk_libs.py` passes on all four release APKs present. No app
+code changed; `flutter analyze` clean and 848 tests green, unchanged.

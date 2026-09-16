@@ -68,15 +68,21 @@ costs at most one API call in its lifetime.
 
 ```bash
 flutter pub get
-flutter build apk --release --target-platform android-arm64
+flutter build apk --release --split-per-abi --target-platform android-arm64
 python tools/check_apk_libs.py
 ```
 
-The APK lands at `build/app/outputs/flutter-apk/app-release.apk`. **arm64 is the
-only target** — every phone made in the last several years is arm64, and this is
-a personal sideload rather than a Play Store upload, so there is nothing to gain
-from building the other two. Add `--split-per-abi` back if a 32-bit device ever
-needs one.
+One APK, at `build/app/outputs/flutter-apk/app-arm64-v8a-release.apk`. **arm64
+is the only target** — every phone made in the last several years is arm64, and
+this is a personal sideload rather than a Play Store upload. Drop
+`--target-platform` to build all three again if a 32-bit device ever needs one.
+
+> `--split-per-abi` is doing real work here and is not redundant with
+> `--target-platform`. On its own, `--target-platform android-arm64` stops Dart
+> being compiled for the other ABIs but **does not remove them from the APK** —
+> plugin `.so` files arrive from AARs regardless, so the file still carries
+> `armeabi-v7a` and `x86_64` folders and weighs 41 MB against this command's
+> 29 MB. Only the split actually drops them.
 
 **The second command is not optional.** SQLite arrives as a Dart code asset that
 is copied into the APK by a step nothing verifies; when that copy is skipped the

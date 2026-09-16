@@ -22,12 +22,20 @@ Run this after every `flutter build apk`:
 
 Exits non-zero, loudly, when an ABI that has Flutter in it has no SQLite.
 """
+import os
 import sys
 import zipfile
 from collections import defaultdict
 
+# Every release APK a documented build command can produce. Which ones exist
+# depends on the flags used: `--split-per-abi` writes one file per ABI and no
+# `app-release.apk` at all, so checking a fixed single path would silently pass
+# by checking nothing, or fail on a file that was never supposed to exist.
 DEFAULT_APKS = [
     'build/app/outputs/flutter-apk/app-release.apk',
+    'build/app/outputs/flutter-apk/app-arm64-v8a-release.apk',
+    'build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk',
+    'build/app/outputs/flutter-apk/app-x86_64-release.apk',
 ]
 
 # An ABI folder that carries the engine is an ABI the app claims to run on, so
@@ -75,7 +83,15 @@ def check(apk):
 
 
 def main(argv):
-    apks = argv[1:] or DEFAULT_APKS
+    apks = argv[1:]
+
+    if not apks:
+        apks = [path for path in DEFAULT_APKS if os.path.exists(path)]
+        if not apks:
+            print('FAIL no release APK found in build/app/outputs/flutter-apk/')
+            print('     Build one first, or pass a path.')
+            return 1
+
     failed = False
 
     for apk in apks:
