@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart' show SynchronousFuture;
 import 'package:flutter/material.dart';
 
+import '../../domain/harm.dart';
 import '../../domain/rarity.dart';
 import '../../domain/sealed_value.dart';
 import '../../domain/signs.dart';
@@ -10,10 +11,12 @@ import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
 import '../../widgets/alchemy_vial.dart';
 import '../../widgets/creature_plate.dart';
+import '../../widgets/curse_line.dart';
 import '../../widgets/food_card.dart';
 import '../../widgets/meal_thumb.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
+import '../../widgets/runic_tabs.dart';
 import '../../widgets/sealed_node.dart';
 import '../../widgets/sign_glyph.dart';
 import '../../widgets/stat_bar.dart';
@@ -33,6 +36,9 @@ class DesignGalleryScreen extends StatefulWidget {
 
 class _DesignGalleryScreenState extends State<DesignGalleryScreen> {
   bool _revealed = false;
+
+  /// Which segment the mode-switch sample is showing.
+  int _mode = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -299,6 +305,65 @@ class _DesignGalleryScreenState extends State<DesignGalleryScreen> {
                   label: 'Sealed until Sunday',
                   expand: true,
                   onPressed: null,
+                ),
+              ],
+            ),
+          ),
+
+          _section('Mode switch'),
+          RunicTabs<int>(
+            tabs: const [
+              RunicTab(
+                value: 0,
+                label: 'The Tally',
+                lore: 'The week in figures.',
+              ),
+              RunicTab(
+                value: 1,
+                label: 'The Tale',
+                lore: 'The week in words.',
+              ),
+            ],
+            selected: _mode,
+            onSelected: (mode) => setState(() => _mode = mode),
+          ),
+          const SizedBox(height: Space.lg),
+          // Three segments, to show the strip does not assume two.
+          RunicTabs<int>(
+            tabs: const [
+              RunicTab(value: 0, label: 'Week'),
+              RunicTab(value: 1, label: 'Month'),
+              RunicTab(value: 2, label: 'All'),
+            ],
+            selected: 1,
+            onSelected: (_) {},
+            accent: Hue.steelLight,
+          ),
+
+          _section('Curse lines'),
+          OrnatePanel(
+            title: 'Curses',
+            accent: Hue.bloodRed,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const CurseLine(
+                  title: 'Salt burn',
+                  detail: '4,100 mg — 205% of the guideline',
+                  basis: 'Sodium against the WHO guideline of 2,000 mg a day.',
+                  isPastGuideline: true,
+                ),
+                const CurseLine(
+                  title: 'Sweet rot',
+                  detail: '38 g — 7% of energy',
+                  basis: 'Free sugars against the WHO guideline of under 10% '
+                      'of energy.',
+                  isPastGuideline: false,
+                ),
+                const RunicDivider(),
+                Text(
+                  harmDisclaimer,
+                  style: Type.lore(size: 11, color: Hue.parchmentFaint),
                 ),
               ],
             ),

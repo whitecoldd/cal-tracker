@@ -25,7 +25,7 @@ void main() {
   setUpAll(loadAppFonts);
 
   testWidgets('design gallery golden', (tester) async {
-    tester.view.physicalSize = const Size(1100, 5400);
+    tester.view.physicalSize = const Size(1100, 6400);
     tester.view.devicePixelRatio = 2;
     addTearDown(tester.view.reset);
 

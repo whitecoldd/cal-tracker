@@ -2680,3 +2680,46 @@ deficit, surplus, expenditure, burned, tdee, projected, falling, rising* —
 after stripping the two density units, per the rule T36 established.
 
 **Verified:** `flutter analyze` clean, 990 tests green.
+
+## T39 — A switch that belongs to this world
+**Date:** 2026-09-16
+
+Two shared primitives, so T41 has something to build the two modes out of.
+990 → 996 tests.
+
+**`RunicTabs` is the app's first segmented control**, because there was no tab
+bar, no segmented button, no toggle and no bottom nav anywhere in `lib/` — a
+grep for all of them finds one `PageView`, in onboarding. The app navigates by
+drawer and full route pushes, so a switch between two *readings of the same
+screen* had nothing to reuse.
+
+It is deliberately not a Material `TabBar`: no controller, no page view, no
+sliding indicator. The caller owns the selection, exactly as `ChoiceList`
+does, so the mode can live in a provider and a golden can be taken of either
+state without driving an animation to settle first. Nothing in it animates —
+engraved, not animated, and an implicit animation would be one more thing
+`pumpAndSettle` has to outlive on every screen that uses it, which is the
+lesson `_LevelUpMark` already carries from T21.
+
+The chosen segment is drawn as a small panel lifted out of the strip: raised
+fill, a lit bottom edge (the `_ChoiceRow` idiom turned through ninety degrees)
+and half-length corner brackets on its two top corners. Unselected segments
+get a short centre hairline between them so two of them do not read as one
+wide button.
+
+**`CurseLine` is an extraction, not a new design.** `_Curse` in
+`alchemy_screen.dart` and `_Weakness` in `creature_sheet.dart` were
+byte-for-byte identical, down to the comment explaining the 4/5 flex split and
+the one about `bloodRed` being unreadable as text. The weekly report needed a
+third copy, and three is where a shape stops being a coincidence.
+
+**The proof it was faithful is in the goldens.** Only `design_gallery.png`
+moved. `alchemy_day.png` and `bestiary_creature.png` are pixel-identical after
+both screens were rewired through the shared widget, which is a stronger check
+than reading the diff.
+
+The gallery's viewport grew from 5400 to 6400 physical pixels for the two new
+sections.
+
+**Verified:** `flutter analyze` clean, 996 tests green, `design_gallery.png`
+regenerated and inspected.

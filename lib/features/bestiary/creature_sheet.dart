@@ -8,6 +8,7 @@ import '../../domain/nutrition.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
 import '../../widgets/creature_plate.dart';
+import '../../widgets/curse_line.dart';
 import '../../widgets/food_card.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
@@ -203,9 +204,9 @@ class _Stat extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Both sides shrink, for the reason `_Weakness` below already gives:
-          // a value can be as long as a list of additive codes, and a fixed
-          // side overflows the row on a narrow phone.
+          // Both sides shrink, for the reason `CurseLine` gives: a value can
+          // be as long as a list of additive codes, and a fixed side
+          // overflows the row on a narrow phone.
           Flexible(
             flex: 4,
             child: Text(label.toUpperCase(), style: Type.label()),
@@ -247,7 +248,13 @@ class _Weaknesses extends StatelessWidget {
               style: Type.lore(),
             )
           else
-            for (final flag in weaknesses) _Weakness(flag: flag),
+            for (final flag in weaknesses)
+              CurseLine(
+                title: flag.kind.title,
+                detail: flag.detail,
+                basis: flag.kind.basis,
+                isPastGuideline: flag.severity >= 1,
+              ),
           const RunicDivider(),
           // Required on every harm surface. See CLAUDE.md §7.
           Text(
@@ -260,46 +267,3 @@ class _Weaknesses extends StatelessWidget {
   }
 }
 
-class _Weakness extends StatelessWidget {
-  const _Weakness({required this.flag});
-
-  final HarmFlag flag;
-
-  Color get _colour => flag.severity >= 1 ? Hue.vitality : Hue.parchmentDim;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Space.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Flexible(
-                flex: 4,
-                child: Text(
-                  flag.kind.title.toUpperCase(),
-                  style: Type.label(color: _colour),
-                ),
-              ),
-              const SizedBox(width: Space.sm),
-              Flexible(
-                flex: 5,
-                child: Text(
-                  flag.detail,
-                  textAlign: TextAlign.right,
-                  style: Type.prose(size: 12),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Space.xxs),
-          // The guideline itself, so a flag is never a bare accusation.
-          Text(flag.kind.basis, style: Type.lore(size: 11)),
-        ],
-      ),
-    );
-  }
-}

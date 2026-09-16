@@ -7,6 +7,7 @@ import '../../domain/scoring.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
 import '../../widgets/alchemy_vial.dart';
+import '../../widgets/curse_line.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
 import '../../widgets/stat_bar.dart';
@@ -349,7 +350,13 @@ class _Curses extends StatelessWidget {
               style: Type.lore(),
             )
           else
-            for (final flag in notable) _Curse(flag: flag),
+            for (final flag in notable)
+              CurseLine(
+                title: flag.kind.title,
+                detail: flag.detail,
+                basis: flag.kind.basis,
+                isPastGuideline: flag.severity >= 1,
+              ),
           const RunicDivider(),
           // Required on every harm surface. See CLAUDE.md §7.
           Text(
@@ -362,57 +369,6 @@ class _Curses extends StatelessWidget {
   }
 }
 
-class _Curse extends StatelessWidget {
-  const _Curse({required this.flag});
-
-  final HarmFlag flag;
-
-  /// Past the guideline reads red; under it stays parchment.
-  ///
-  /// Not steel, which rendered dimmer than the detail beside it and inverted
-  /// the hierarchy — the name of the curse has to lead. And not bloodRed,
-  /// which T1 already found unreadable as text on this ground.
-  Color get _colour => flag.severity >= 1 ? Hue.vitality : Hue.parchmentDim;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: Space.md),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Both sides shrink: a harm detail can be as long as
-              // "60 g — 24% of energy", and a fixed side would overflow the
-              // row on a narrow phone.
-              Flexible(
-                flex: 4,
-                child: Text(
-                  flag.kind.title.toUpperCase(),
-                  style: Type.label(color: _colour),
-                ),
-              ),
-              const SizedBox(width: Space.sm),
-              Flexible(
-                flex: 5,
-                child: Text(
-                  flag.detail,
-                  textAlign: TextAlign.right,
-                  style: Type.prose(size: 12),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Space.xxs),
-          // The guideline itself, so a flag is never a bare accusation.
-          Text(flag.kind.basis, style: Type.lore(size: 11)),
-        ],
-      ),
-    );
-  }
-}
 
 /// Nothing logged yet.
 ///

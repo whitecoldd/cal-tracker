@@ -23,6 +23,15 @@ its line to it.
 
 ---
 
+## 1.0.6+7 — A switch that belongs to this world
+
+- `RunicTabs`: the app's first segmented control, painted rather than
+  Material — lit bottom edge, corner brackets on the chosen segment, no
+  animation.
+- `CurseLine`: the harm row that existed twice byte-for-byte (Alchemy and the
+  creature sheet) is now one widget used in three places.
+- Both added to the design gallery, as §5 requires.
+
 ## 1.0.5+6 — The week, live
 
 - `weekPatternProvider` and `weekFindingsProvider`: the descriptive half read
