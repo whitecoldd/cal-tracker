@@ -1174,3 +1174,563 @@ returns. The round trip is covered against a real database and a real folder,
 but the folder in the test is a temp directory, not
 `/storage/emulated/0/Documents/`. Same for the icon and splash — they parse,
 they build, and what they *look like* is a device question.
+
+---
+
+## T15 — The improvement plan
+**Date:** 2026-09-15
+
+No code. The first real-device shakedown of the T14 build produced five reports,
+and reading the code around them turned up six more issues that had never been
+written down. [[91-Improvement-Plan]] is now where they live, and
+[[00-Index]] points at it.
+
+**Why a separate note rather than more of this log.** This file is a record of
+what *happened*, in order, and it is 1,176 lines. An open issue buried in it is
+an issue nobody will find — which is precisely what happened to four of the six.
+Two of them ("Yrden reads a water log nothing writes", carried from T12a to T12b
+and then dropped) had been written down twice and still went unscheduled. A
+backlog needs to be a list you can read in one sitting.
+
+**Three of the five reports were narrower than they looked**, and that is the
+part worth recording here:
+
+- **"New feature: photograph a dish."** Already shipped in T9. The button renders
+  only when a key is saved, so on a keyless install it is invisible. The work is
+  discoverability, not capability.
+- **"Add water tracking."** The table, the DAO and the Yrden sign have existed
+  since T12a. `upsertWater` has zero callers. No migration needed.
+- **"The barcode scan dies instantly."** Not a camera fault. The scan succeeds
+  and returns the code; the failure message is posted through the root
+  `ScaffoldMessenger` and painted into the `JournalScreen` scaffold —
+  *underneath* the opaque bottom sheet. Both error strings are completely
+  covered by void black.
+
+That last one is the lesson of the round. The error handling was written, tested
+at the provider level, and correct; it just had nowhere to appear. Every path in
+`_scan` reports through one channel, and that channel had been invisible since
+the sheet was built in T4. There is no widget test for the search sheet or the
+scanner, which is why nothing caught it — `test/food_lookup_test.dart` covers the
+providers and the fake remote only.
+
+**Two things it changed about the plan.** The barcode fix leads, because it is
+the only report where the app loses data the user tried to give it. And no new
+AI use case is added: `../CLAUDE.md` §4 caps AI at four purposes, photo → items
+is already one of them, and the portion estimator that T20 wires up is the
+second purpose, which Settings has advertised since T8 without anything calling
+it. The budget maths is unchanged.
+
+**Verified:** `flutter analyze` clean, 706 tests green — both unchanged, as they
+should be for a documentation commit.
+
+---
+
+## T16 — The barcode that answered nothing
+**Date:** 2026-09-15
+
+A scan of a packet of salted almonds read the code, closed the scanner, and
+added nothing — with no error either. Three separate faults, each of which
+would have hidden the other two. 706 → 720 tests.
+
+**The scanner was never the problem.** It read the barcode and returned it
+correctly. What failed was everything after, and the reason nothing was said is
+the sort of bug that survives a good test suite: `_say` posted a `SnackBar`
+through the root `ScaffoldMessenger`, which paints into the `JournalScreen`
+scaffold. The search sheet sits *above* that in the navigator and is opaque from
+48px to the bottom edge. Every message this sheet has produced since T4 was
+drawn underneath it.
+
+The error handling was written, it was correct, and it had nowhere to appear.
+The notice is now rendered inside the sheet, above the results, dismissible and
+cleared by the next keystroke. Reverting only that one method makes four of the
+five new widget tests fail, which is the check that the test is real.
+
+**Four outcomes were collapsed into one `null`.** `barcodeLookupProvider`
+returned `Food?` and threw `RemoteUnavailable`, so "upstream has never heard of
+this code", "upstream has it and it cannot be used", "the write-back failed" and
+"there is no network" all arrived as the same nothing. It now returns a sealed
+`BarcodeOutcome`, so `non_exhaustive_switch_*` makes the sheet say something
+true about each — the same enforcement the reveal gate uses, for the same
+reason. `OffMapper.fromProduct` returns a sealed `ProductLookup` under it, since
+only the mapper knows *why* it refused.
+
+**The mapper was rejecting real products as nameless.** This is what the almonds
+actually hit. `product_name` carries only the field for the language that was
+asked for, and the request pins English; a product named solely in Romanian
+arrives with it empty and was thrown away.
+
+Worth recording that the obvious fix is not enough: the package ships
+`getBestProductName`, but it too only ever looks at the one language it is
+given, so it returns empty for exactly this case. The fields request now asks
+for `NAME_ALL_LANGUAGES` and `GENERIC_NAME`, and when the package's own helper
+comes back empty the mapper falls back to a name in *any* language upstream has.
+A name in a language the user did not ask for is still the name on the packet in
+their hand.
+
+The no-energy rejection stays. Mapping a product with no energy figure to
+`kcal: 0` adds a silent zero to the day and the user believes they logged their
+lunch. But the refusal now carries the name upstream *did* give, so T19 can
+offer to record it by hand starting from something.
+
+**Two catches were letting failures escape entirely.** `_guard` caught only
+`Exception`, so a `TypeError` from crowd-sourced JSON — a string where the
+schema says a number — sailed straight past it, and `_scan` caught only
+`RemoteUnavailable`, so a database error from the write-back did too. In a
+minified release build, which is what ships, either one is a failure with no
+output at all. `_guard` now has a terminal `catch (e)`; catching `Error` is
+normally a bug worth crashing on, but upstream's data is not our invariant.
+
+**The scanner screen gained the feedback it never had.** A haptic tick on a
+successful read — without it, "the camera never read anything" and "it read
+something and the lookup found nothing" are the same experience. Also a
+`mounted` guard before popping, and `onDetectError` actually supplied: its
+default is a documented no-op, so a damaged or badly-lit label used to leave the
+preview running with nothing to show for it.
+
+**One design note.** `BarcodeScannerScreen.scan` is now behind
+`barcodeScannerProvider`, injected the same way as `foodRemoteProvider` and
+`imagePickerProvider`. A widget test has no camera, and without that seam the
+whole reporting path stays untestable — which is precisely how it came to be
+broken for four tasks. There is now a `test/food_search_sheet_test.dart`; the
+sheet had none at all.
+
+**Verified:** `flutter analyze` clean, 720 tests green, `flutter build apk
+--debug` succeeds. The scan itself is still a device question.
+
+---
+
+## T17 — The waterskin
+**Date:** 2026-09-15
+
+Yrden has read a water log since T12a that nothing could write. The gap was
+recorded twice — once in T12a, again in T12b's "gaps left open" — and scheduled
+neither time. It is now fillable. 720 → 738 tests.
+
+**No schema change.** `WaterLogs`, `TrackingDao.upsertWater` and the sign were
+all built and tested two tasks ago; the only missing piece was a button. Worth
+noting for its own sake: the cheapest feature in this repo was also the one that
+sat open longest, because nothing in the log said how cheap it was. That is why
+[[91-Improvement-Plan]] now exists.
+
+**A food counts as a drink because of how it was logged**, not because of
+anything on the food row. Nothing there marks a food as a liquid, and the same
+row is a splash of milk or a glass of it depending on the entry. So the rule is
+`entry.unit == PortionUnit.millilitres`, and the volume credits 1:1 — which is
+not a fudge, because `PortionUnit.millilitres` already declares one gram per
+millilitre, so `grams` on such an entry *is* the volume and has been since T4.
+
+**Only alcohol discounts, and it discounts to zero.** The temptation was to
+discount coffee and tea too, and it was refused on the grounds that no caffeine
+figure is stored on a food anywhere in this app — any such number would have had
+no source behind it, and the current evidence is that caffeinated drinks hydrate
+about as well as water anyway. Alcohol differs on both counts: `alcoholG` is
+stored, and it is a genuine diuretic. Crediting it as nothing is the
+simplification that can never *overstate* how much someone has drunk, which is
+the only direction that matters. Lore, not a physician, as everywhere else.
+
+**The two sources cannot double count, by construction.** The tapped figure is a
+`water_logs` row; the drink figure derives from `entries`. They are disjoint, and
+`Hydration` is the single place they are added, read by both the panel and the
+glyph — so the two can never disagree about how much someone drank. The claim is
+pinned in `signs_test.dart` as an equality: 2,000 tapped, 2,000 drunk and
+1,000 + 1,000 all charge Yrden identically.
+
+Someone who both taps +500 and logs "Water, 500ml" has recorded the same glass
+twice. That is a thing they did, not a thing the app did.
+
+**A bug fixed on the way.** `signChargesProvider` read water through `waterFor`,
+a one-shot query. While nothing could write water this was merely pointless;
+with the waterskin writing to it, the glyph would have shown a figure from
+before the last sip. It watches `hydrationProvider` now.
+
+**Two traps worth recording.**
+
+`water_logs` holds one total per day, not a list of sips, so there is no log to
+undo — the minus button is a *decrement* and reads as one. It remembers the last
+amount added so the immediate undo is exact, and falls back to the smaller step
+after a rebuild. Anything better needs a per-sip table, which is not worth a
+schema version for a button.
+
+And `journal_test.dart` asserts that no text on the Journal contains `/`, plus a
+banned-word list including *target* and *goal*. A default `StatBar` renders
+`1500 / 2000` and fails it — correctly, because an `x / y` ring is the progress
+framing this app exists to refuse. The bar reads "1,500 of 2,000 ml" and the
+caption says Yrden asks for two litres. The test was honoured, not edited; it
+caught exactly what it was written to catch, two tasks after it was written.
+
+**Both Journal tests and the Journal golden gained a `waterLogProvider`
+override.** Without it every one of them opens a live drift stream, which fake
+async never lets finish and which leaks a timer on cancel — the same lesson as
+T10, T11 and T12b, and now the fourth time a screen gaining a provider has
+broken the widget tests that mount it. `path_screen_test` overrides
+`signChargesProvider` wholesale and was unaffected.
+
+**Verified:** `flutter analyze` clean, 738 tests green, `journal_day.png`
+regenerated and inspected.
+
+**One note on the toolchain, from doing this wrong.** Two `flutter test` runs
+overlapping collide on `build/native_assets/sqlite3.dll` and the second dies
+with the `PathExistsException` the rules warn about — the same wreckage as
+killing a run, reached from the other direction. `rm -rf build/native_assets`
+is still the fix. Do not start a second run while one is in flight.
+
+---
+
+## T18 — A search that finds things
+**Date:** 2026-09-15
+
+Two searches came back from first use, and both failed outright: "white monster"
+found nothing while "monster ultra" worked, and "5 fried eggs" found nothing at
+all. One cause each, plus a third nobody had noticed. 738 → 780 tests.
+
+**The old query was a single `LIKE '%<whole typed string>%'`.** So a multi-word
+search only matched words that were *adjacent and in the order typed* — "white
+monster" cannot match `monster energy ultra white` by construction — and a
+leading digit was searched for literally. There was no tokenisation, no plural
+handling and no quantity parsing anywhere in the path. Matching is now
+token-based: every term must appear, in any order.
+
+**The plural rule needs no migration, and that is the whole design.** The
+instinct is to normalise plurals on both sides, which means re-keying every row
+already on a device. It is unnecessary, because the match is *containment*, not
+equality. Stem the **query only**, with a purely *truncating* stem, and the stem
+is a prefix of both forms: `eggs` → `egg` finds a stored `egg whole` and a
+stored `scrambled eggs` alike. `search_key` keeps its exact contract, the T2 test
+pinning `'  Coca-Cola   ZERO! '` → `coca cola zero` stays green untouched, and
+`schemaVersion` stays at 1.
+
+The length floors matter more than they look: without them `is` becomes `i`,
+`fries` becomes `fr`, and `glass` becomes `gla` — terms that match nearly
+everything.
+
+**Two bugs found while writing it, both mine, both caught by tests.**
+
+The quantity parser read the *normalised* text, and normalisation strips every
+punctuation mark — so `1.5 cup rice` had already become `1 5 cup rice` and the
+half was gone before the parser saw it. The quantity is now read off the raw
+string, which is also simply more correct: the parser should see what the user
+typed.
+
+And `a dozen eggs` came out as quantity **one**, because "a" is itself a number
+word and was consumed first. An article followed by another number word now
+defers to the second.
+
+**A test expectation of mine was also wrong**, which is worth recording because
+the code was right: I had asserted `ricecakes` was a worse answer for "rice"
+than `brown rice`. It is not — the term *begins* the word, and a prefix is what
+typing into a search box means. `licorice` is the tier-2 case.
+
+**Number words earn their place.** They look like indulgence in a search box
+until you notice that *every* term must match: an unrecognised leading "dozen"
+would block the entire query and return nothing, which is strictly worse than
+what this replaces. Fifteen constant entries buy that off. Fractions, ranges and
+"a couple" are deliberately not supported — the free-text path already has a
+model behind it, and turning the search box into a second parser duplicates it.
+
+**The ranking was a lie, and is now a comparator.** `FoodsDao.search`'s comment
+promised ordering by source quality; there was no ordering term on `source` at
+all, so an AI row at confidence 0.95 outranked a seed row at 0.9 — the exact
+inversion the comment said could not happen. It is a Dart comparator now, partly
+because the tier rule is a domain rule that must be testable without a database,
+and partly because this is precisely how quietly an SQL `ORDER BY` stops meaning
+what it says it means. The `WHERE` stays in SQLite as N ANDed LIKEs.
+
+**Two stale-state bugs fixed in the same area.**
+
+`foodSearchProvider` was not `autoDispose` and never invalidated, so every
+distinct string ever typed was cached for the life of the app — and a food
+written by a barcode scan or a remote pick did not appear when the same query
+was retyped. `autoDispose` alone does not cover that case, because the sheet
+never closed; a `foodLibraryTickProvider` bumped by the three write sites does.
+
+And the clear button set the query directly without cancelling the debounce, so
+a timer scheduled a moment earlier fired afterwards and put the cleared query
+straight back. Both now go through one `_setQuery`. Reverting only that makes
+the new widget test fail, which is the check that the test is real.
+
+**One judgement call in the portion sheet.** A bare number means "5 of them",
+not "5 grams", so a parsed quantity is only trusted when the query named a unit
+or the food comes in pieces. Otherwise "5 fried eggs" against a food with no
+piece weight would open the sheet at **5 g** — worse than the 100 it replaces.
+A barcode also deliberately does not carry the count through: it names one
+specific product, and whatever number is sitting in the search box is about
+something else.
+
+**Verified:** `flutter analyze` clean, 780 tests green. Whether the seed table
+actually contains a "fried egg" is a separate question — it does not, and T19's
+hand-written foods are the answer to that.
+
+---
+
+## T19 — Write it down yourself
+**Date:** 2026-09-15
+
+`FoodSource.manual` has been the top rung of `FoodsDao.upsert`'s trust ladder
+since T2, and nothing in the app could write it. The enum value existed, the
+precedence rule that protects it was written and tested, and there was no UI
+anywhere that produced one. 780 → 790 tests.
+
+The consequence was a dead end at exactly the moment the app is supposed to be
+at its most useful. Three of the four resolution steps can miss at once —
+nothing in the library, nothing in the seed table, no network or nothing
+upstream — and until now the fourth step, the user's own knowledge, had no way
+in. A packet in their hand, and the answer was "search by name instead".
+
+**Two entry points, both of which were previously terminal.**
+
+The search sheet's empty state, which is reached whenever there is no key and no
+network. That is not an edge case: it is the configuration the app is designed
+to remain fully usable in, and it was the one place where it was not.
+
+And T16's `BarcodeUnusable`, prefilled with whatever name upstream did give.
+This is why that refusal was made to carry the name rather than just a reason —
+"the ledger knows it as Salted almonds but records no energy for it" is a much
+better starting point than a blank field, and the row it writes keeps the
+barcode, so the scan that failed works from then on.
+
+**A hand-written row is permanently authoritative.** `upsert` already refuses to
+let a weaker source overwrite a stronger one, so a later Open Food Facts scan of
+the same barcode enriches nothing and replaces nothing. That rule now has a test
+that can actually reach it: write 600 kcal by hand, then upsert the same barcode
+from upstream at 123 kcal, and the row still reads 600 with one row in the table.
+Before this task that assertion could not have been written.
+
+The sheet passes an empty search key on purpose and lets `upsert` compute it —
+the same reason T4 put that rule there, and the reason a caller that normalised
+differently would silently insert a duplicate.
+
+**Kept deliberately small.** Name, brand, and the five figures on the front of a
+packet: energy, protein, carbohydrate, fat, fibre. Per 100 g, like everything
+else in the app. Sodium, sugar, NOVA group and additives are all absent, and
+that is the point — this is a form someone fills in standing in a kitchen with
+a packet, not a data-entry screen. Anything it does not capture can be corrected
+later through the same sheet, since a manual row may always be overwritten by
+another manual row.
+
+**Two test notes.** `scrollUntilVisible` needs the *sheet's* scrollable, not
+`find.byType(Scrollable).last` — a `TextField` has an internal scrollable of its
+own, and pointing at it drags something 38 pixels below the bottom of the
+screen. Targeting it as the ancestor of a heading unique to the sheet is stable
+in a way an index is not.
+
+And a `ListView` does not build what has not been scrolled to, so the submit
+button genuinely does not exist in the tree until then. Worth remembering: the
+failure reads like a missing widget, not like a scrolling problem.
+
+**Verified:** `flutter analyze` clean, 790 tests green.
+
+---
+
+## T20 — The photograph, made findable
+**Date:** 2026-09-15
+
+Reported as a feature request: *"I should be able to take a picture of the dish
+I cooked and the AI should break it down."* It has done exactly that since T9.
+790 → 797 tests.
+
+**The whole feature was invisible.** Both AI buttons rendered only when a key
+was saved, so on a keyless install there was no camera icon at all — no button,
+no hint, nothing to suggest the capability existed. The reasoning behind that
+gate was sound and is quoted in the source: *"a button that always fails is
+worse than no button, and the app is fully usable without one."* It produced the
+wrong outcome anyway.
+
+The flaw is that it weighed two options and there was a third. A button that
+*explains itself* is neither a button that always fails nor no button. Both now
+render always, dimmed without a key, and tapping one says what the model would
+do and offers a route to Settings. It is written as an offer rather than a
+warning, because nothing has gone wrong: the app is complete without a key, and
+the panel says so.
+
+Worth keeping as a general lesson — a capability nobody can discover is worth
+nothing, and "it would fail if they tried" is not a reason to hide it, only a
+reason to not let them try blindly.
+
+**The prompt was wrong for cooked food.** `photoSystem()` said *"Name only what
+you can actually see. Do not infer a side dish that is out of frame."* Right for
+a plated meal; wrong for a stew, a bake or a curry, where the components are by
+definition not individually visible. A model held to the strict reading returns
+one opaque item or nothing.
+
+The composite clause is not a loosening of that rule, it is the rule applied
+honestly — a stew is a thing you *can* see. What keeps it truthful is that a
+component the model did not see directly must carry a confidence of 0.5 or
+below, which the app already surfaces as a portion worth correcting, and that it
+is told to prefer a few large components over a long invented recipe.
+
+The "only what you can actually see" line was left **exactly** as it was, rather
+than reworded around the new clause. `ai_prompts_test.dart` asserts on that
+phrase, and a test guarding a §1-adjacent invariant is not something to edit
+around when the clause can simply be added beside it.
+
+The note field was moved out of the margin and given a heading — *"What did you
+cook?"* — with a worked example. The cook is the only source in the whole
+exchange that was actually present when the food was made, and what they say
+outweighs anything a model can infer from pixels.
+
+**`estimatePortion` is finally called.** It has had a client, a schema, a
+decoder, a prompt and tests since T8, `ResolvedPortion.worthRefining` has been
+sitting there as the hook it was built for, Settings has advertised the feature
+for twelve tasks, and nothing in `lib/` ever invoked it. Offered now in the
+portion sheet, on a portion the app has already admitted is a guess, only when a
+key exists.
+
+This is **not a fifth AI purpose** — CLAUDE.md §4 caps it at four and requires a
+deliberate decision to add one. This is the second of the four, completed. The
+budget maths is unchanged.
+
+Taking the estimate switches the entry to grams rather than storing a corrected
+multiplier against "handful". That is what makes it honest: the entry then reads
+45 g, which is what it means, and it inherits the confidence of an exact unit
+instead of the handful's 0.5.
+
+**Two things the tests caught.** A four-pixel vertical overflow at 360 logical
+pixels — the third time a fixed column at that width has done this in this
+project, and the reason the notice is now scrollable. And `WitcherButton`
+uppercases its own label, so `find.text('Not now')` finds nothing.
+
+**Verified:** `flutter analyze` clean, 797 tests green. Whether a model actually
+breaks a real cooked dish into sensible components is a device-and-key question
+that no test here can stand in for.
+
+---
+
+## T21 — Turning the page
+**Date:** 2026-09-15
+
+The app's first animation outside onboarding, and the one the progress log has
+recorded as planned-and-dropped twice. 797 → 803 tests, no golden changed.
+
+**Not a swipeable `PageView`, and the reason is not the index arithmetic.** Six
+providers read the *global* day cursor rather than a page's day —
+`journalEntriesProvider`, `dayActivityProvider`, `dayActivityIsManualProvider`,
+`toxicityProvider`, `signChargesProvider` and `journalDayViewProvider`. A page
+view builds the adjacent page *before* the cursor moves, so the incoming page
+would render the current day's numbers and then visibly flicker to the right
+ones. Making it honest means re-keying all six as `.family<..., Day>` and
+touching every one of their tests. That is its own task, and the right one to do
+first if swipe-to-change-day is ever wanted.
+
+**The trap was worse than a loading flash.** When the cursor moves,
+`journalEntriesProvider` is recreated, and in Riverpod 2 `whenData` on an
+`AsyncLoading` yields a plain `AsyncLoading` — **previous data is not carried
+through**. So the old `switch (view)` fell to its `SizedBox.shrink()` arm and the
+body blanked for a frame. And `dailyTotalsProvider` was a separate provider with
+its own `orElse: empty`, so even a partial fix would have shown the previous
+day's rows beside zeroed totals.
+
+Both are fixed by making a rendered page **one atomic value**: `DailyTotals` is
+now a `late final` on `JournalDay`, and a small stateful widget holds the last
+*settled* page and ignores loading frames. The body therefore lags the date
+header by the length of one drift query. That is deliberate and is commented as
+such — a page that arrives late beats one that slides in empty and then fills.
+
+The switcher is keyed on the day the **data** is for, not on the cursor, so
+adding an entry to the same day is a plain rebuild rather than a page turn.
+
+**Direction is a plain field on the notifier.** Not a second provider: two values
+that can disagree is worse than one that cannot, and a second provider raises a
+rebuild-ordering question with no good answer. It is only ever read during the
+rebuild the day change itself caused, so the fact that it does not notify is
+correct rather than a hazard — and `lastShift` is directly unit-testable.
+
+One thing that is easy to get wrong: `AnimatedSwitcher` rebuilds the *outgoing*
+child with the same `transitionBuilder` and a reversing animation, so without
+telling the two apart by key the old page slides back the way it came instead of
+out the other side.
+
+**Two bugs found by the tests, both mine.**
+
+A `CircularProgressIndicator` left in the tree at zero opacity never stops
+spinning, so `pumpAndSettle` can never settle — every widget test on the search
+sheet timed out at once. The scrim still fades; the spinner inside it is built
+only while it is spinning.
+
+And a `SliverAnimatedOpacity` at a constant `opacity: 1` animates nothing. It was
+written to fade the Open Food Facts section in, and it would have been a no-op
+dressed as an animation, so it was dropped rather than shipped. The local list is
+deliberately not animated either: it changes on every settled keystroke, and
+fading each one reads as lag.
+
+**Motion lives in the theme tokens**, for the same reason colour does — 220ms and
+a 6% slide is a page being turned, not a Material route, and a duration picked
+per widget drifts. `tokens.dart` now imports `package:flutter/animation.dart`
+rather than `material`: it is the bottom of the theme layer and nothing in it
+should be able to reach a widget.
+
+**No golden changed**, which is the check that the claim holds:
+`AnimatedSwitcher` does not animate its first child, so a freshly pumped screen
+is at rest. Had one changed, the key would have been wrong.
+
+**Verified:** `flutter analyze` clean, 803 tests green, goldens pass without
+regeneration.
+
+---
+
+## T22 — The library that was not there
+**Date:** 2026-09-16
+
+A release APK that installed, launched, and showed "The Path is blocked" on the
+first frame. `Failed to load dynamic library 'libsqlite3.so'`. No code change
+caused it; the build system did, and it did so silently.
+
+**What actually happened, in order.** `sqlite3` 3.x has no Android module — it
+is a Dart *code asset*. Its build hook downloads a prebuilt `libsqlite3.so` per
+ABI into `.dart_tool/hooks_runner/shared/sqlite3/build/download-*/`, and
+`flutter assemble`'s `install_code_assets` step copies them into
+`build/native_assets/android/jniLibs/lib/<abi>/`, a directory the Flutter Gradle
+plugin has registered as a `jniLibs` source dir (`FlutterPlugin.kt:442`, in the
+SDK, not this repo).
+
+On 2026-09-15 a `flutter test --update-goldens` run died with the
+`PathExistsException` on `build/native_assets/windows/sqlite3.dll` that §2 of
+CLAUDE.md warns about — and §2's remedy was `rm -rf build/native_assets`. That
+took `android/jniLibs/` with it. The next `flutter build apk --release` then
+produced an APK with no SQLite in it.
+
+**The part that makes this a trap rather than a mistake.** `install_code_assets`
+declares exactly one output — `native_assets.json` — and that file lives in
+`.dart_tool/flutter_build/<hash>/`, not in `build/native_assets/`. So after the
+wipe the stamp was still valid, the step was skipped, and it would have gone on
+being skipped forever. And Gradle cannot tell: an empty `jniLibs` source
+directory is a legal empty source directory. `flutter analyze` was clean,
+803 tests were green, Gradle reported success, and the APK was broken.
+
+The evidence was all on disk and none of it needed a phone:
+
+| artifact | time | `libsqlite3.so` |
+|---|---|---|
+| `app-arm64-v8a-release.apk` | 09-15 17:12 | present |
+| `app-debug.apk` | 09-15 18:22 | present |
+| *`rm -rf build/native_assets`* | 09-15 18:37 | — |
+| `app-release.apk` | 09-15 19:13 | **absent** |
+
+`build/app/intermediates/merged_jni_libs/release/.../out/` was empty while the
+debug equivalent had all three ABI folders, which places the loss upstream of
+packaging rather than in the release-only `isMinifyEnabled` / `isShrinkResources`
+— neither of which touches `lib/`.
+
+**Three things changed, and no app code.**
+
+`tools/check_apk_libs.py` opens the APK and fails if any ABI folder carrying
+`libflutter.so` lacks `libsqlite3.so`. Keying on the engine rather than on
+`libapp.so` matters: a fat release APK carries plugin `.so` files for ABIs it
+was never built for, because those arrive from AARs, so plugin libraries are not
+evidence that the app targets an ABI. Verified against all three APKs above —
+it passes the two good ones and fails the shipped one.
+
+§2 of CLAUDE.md now says to delete the single half-copied `sqlite3.dll` rather
+than the tree, and §3 has a new subsection explaining the missing-output stamp,
+because "never `rm -rf` this directory" is not a rule anyone can follow without
+knowing why.
+
+The recovery is `rm -f .dart_tool/flutter_build/*/install_code_assets.stamp`,
+which is narrower than `flutter clean` and rebuilds in a fraction of the time.
+
+**What was deliberately not done.** A Gradle-side check that fails the build
+would be automatic rather than remembered, which is better — but the copy is
+produced by a Flutter task and consumed by an AGP task with no declared
+dependency between them, so a `doFirst` assertion on `merge*JniLibFolders`
+could fire on an ordering that is merely unlucky rather than broken. A check
+that fails builds that would have worked is worse than one that runs a second
+after them. The APK itself is the honest thing to inspect.

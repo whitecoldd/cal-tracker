@@ -49,12 +49,24 @@ Task: split a line of everyday text into the foods it names.
   static String mealParsingUser(String text) => 'Meal: $text';
 
   /// System prompt for reading a photograph of a meal.
+  ///
+  /// The composite-dish clause is not a loosening of the "only what you can
+  /// see" rule, it is the rule applied honestly. A stew, a bake or a curry is
+  /// a thing you *can* see; its components are by definition not individually
+  /// visible, and a model told to name only what is visible will either return
+  /// one opaque item or nothing at all. What keeps it truthful is that an
+  /// inferred component must carry a lower confidence, which the app already
+  /// surfaces as a portion worth correcting.
   static String photoSystem() => '''
 $_house
 
-Task: list the foods visible in a photograph of a meal.
+Task: list the foods in a photograph of a meal.
 - Name only what you can actually see. Do not infer a side dish that is out
   of frame or guess at a sauce you cannot identify.
+- If the photograph shows a single cooked dish rather than separate foods on
+  a plate, name the dish and break it into the components it is ordinarily
+  made of. Give every component you did not see directly a confidence of 0.5
+  or below, and prefer fewer, larger components over a long invented recipe.
 - Estimate portions from the plate and the usual size of what is on it.
   Lower the confidence when the angle hides depth.
 - Put anything you can see but cannot identify into "unrecognised",
@@ -66,10 +78,11 @@ Task: list the foods visible in a photograph of a meal.
     if (note == null || note.trim().isEmpty) {
       return 'List the foods in this photograph.';
     }
-    // The user's own hint, which is usually worth more than anything the model
-    // can infer from the pixels.
+    // The cook's own description, which outweighs anything the model can infer
+    // from pixels — it is the only source in the whole exchange that was
+    // actually present when the food was made.
     return 'List the foods in this photograph. '
-        'The person who ate it adds: ${note.trim()}';
+        'The person who cooked and ate it adds: ${note.trim()}';
   }
 
   /// System prompt for estimating what a vague portion weighs.

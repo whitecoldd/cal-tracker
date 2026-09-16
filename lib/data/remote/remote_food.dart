@@ -133,3 +133,50 @@ class RemoteFood {
     );
   }
 }
+
+/// Why a product that exists upstream still cannot be logged.
+///
+/// Both are common in a crowd-sourced database, and they are different
+/// problems: a nameless product is one the user can name themselves, while a
+/// product with no energy figure is one nobody can rescue without weighing it.
+enum UnusableReason {
+  /// Upstream carries no product name in any language we asked for.
+  noName,
+
+  /// Upstream carries no energy value, in kcal or kJ.
+  noEnergy,
+}
+
+/// What a barcode lookup found upstream.
+///
+/// Sealed because "we have never heard of this code" and "we have it but it is
+/// unusable" are different answers that the old nullable return collapsed into
+/// one silent `null` — which is how a scan came to fail with nothing on screen.
+/// The analyzer treats a non-exhaustive switch as an error, so a caller cannot
+/// forget one of these the way the old `null` was forgotten.
+sealed class ProductLookup {
+  const ProductLookup();
+}
+
+/// A product that can be logged as it stands.
+final class ProductFound extends ProductLookup {
+  const ProductFound(this.food);
+
+  final RemoteFood food;
+}
+
+/// A product upstream holds but the app cannot honestly use.
+///
+/// [name] is whatever upstream did give, when it gave one — worth carrying,
+/// because it is what a hand-written entry can be prefilled with.
+final class ProductUnusable extends ProductLookup {
+  const ProductUnusable(this.reason, {this.name});
+
+  final UnusableReason reason;
+  final String? name;
+}
+
+/// Upstream has no record of this barcode at all.
+final class ProductUnknown extends ProductLookup {
+  const ProductUnknown();
+}

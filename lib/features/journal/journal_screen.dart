@@ -15,6 +15,7 @@ import '../shell/paths_drawer.dart';
 import 'food_search_sheet.dart';
 import 'journal_providers.dart';
 import 'portion_sheet.dart';
+import 'water_panel.dart';
 
 /// Today, as a quest log.
 ///
@@ -27,8 +28,6 @@ class JournalScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final day = ref.watch(journalDayProvider);
-    final view = ref.watch(journalDayViewProvider);
-    final totals = ref.watch(dailyTotalsProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Journal')),
@@ -47,13 +46,7 @@ class JournalScreen extends ConsumerWidget {
         child: Column(
           children: [
             _DayBar(day: day),
-            Expanded(
-              child: switch (view) {
-                AsyncData(:final value) => _Body(day: value, totals: totals),
-                AsyncError(:final error) => _Failed(error: error),
-                _ => const SizedBox.shrink(),
-              },
-            ),
+            const Expanded(child: _TurningPage()),
           ],
         ),
       ),
@@ -119,20 +112,99 @@ class _DayBar extends ConsumerWidget {
   }
 }
 
+/// The day's page, and the slide from one day to the next.
+///
+/// Holds the last *settled* page rather than rendering whatever the provider
+/// currently says. When the day cursor moves, `journalEntriesProvider` is
+/// recreated and Riverpod's `whenData` on a loading state yields a plain
+/// loading state — previous data is **not** carried through — so a direct
+/// switch on the AsyncValue blanks the screen for a frame.
+///
+/// Holding the last page means the body lags the date header by the length of
+/// one drift query, and the slide coincides with real data arriving. That lag
+/// is deliberate: a page that arrives late beats one that slides in empty and
+/// then fills. Do not "fix" it back into a flicker.
+class _TurningPage extends ConsumerStatefulWidget {
+  const _TurningPage();
+
+  @override
+  ConsumerState<_TurningPage> createState() => _TurningPageState();
+}
+
+class _TurningPageState extends ConsumerState<_TurningPage> {
+  JournalDay? _shown;
+
+  @override
+  Widget build(BuildContext context) {
+    final view = ref.watch(journalDayViewProvider);
+
+    if (view case AsyncData(:final value)) _shown = value;
+
+    if (view case AsyncError(:final error) when _shown == null) {
+      return _Failed(error: error);
+    }
+
+    final shown = _shown;
+    if (shown == null) return const SizedBox.shrink();
+
+    // Read, not watched: the direction is only meaningful during the rebuild
+    // the day change itself caused.
+    final direction = ref.read(journalDayProvider.notifier).lastShift;
+
+    return AnimatedSwitcher(
+      duration: Motion.page,
+      switchInCurve: Motion.easeOut,
+      switchOutCurve: Motion.easeOut,
+      // The default centres its children with loose constraints, which a
+      // full-height ListView reads differently from a tight one.
+      layoutBuilder: (current, previous) => Stack(
+        fit: StackFit.expand,
+        alignment: Alignment.topCenter,
+        children: [...previous, ?current],
+      ),
+      transitionBuilder: (child, animation) {
+        // AnimatedSwitcher rebuilds the *outgoing* child with this same
+        // builder and a reversing animation, so without telling the two apart
+        // the old page slides back the way it came.
+        final incoming = child.key == ValueKey(shown.day);
+        final dx = (incoming ? direction : -direction) * Motion.slide;
+
+        return FadeTransition(
+          opacity: animation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: Offset(dx, 0),
+              end: Offset.zero,
+            ).animate(animation),
+            child: child,
+          ),
+        );
+      },
+      // Keyed on the day the *data* is for, not the cursor: adding an entry to
+      // the same day must be a plain rebuild, not a page turn.
+      child: KeyedSubtree(
+        key: ValueKey(shown.day),
+        child: _Body(day: shown),
+      ),
+    );
+  }
+}
+
 class _Body extends StatelessWidget {
-  const _Body({required this.day, required this.totals});
+  const _Body({required this.day});
 
   final JournalDay day;
-  final DailyTotals totals;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       padding: const EdgeInsets.fromLTRB(Space.lg, 0, Space.lg, 96),
       children: [
-        _TotalsPanel(totals: totals),
+        _TotalsPanel(totals: day.totals),
         const SizedBox(height: Space.md),
         const ActivityPanel(),
+        const SizedBox(height: Space.md),
+        const WaterPanel(),
         const SizedBox(height: Space.lg),
         if (day.isEmpty)
           const _EmptyDay()

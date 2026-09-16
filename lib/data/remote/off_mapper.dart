@@ -27,7 +27,12 @@ abstract final class OffMapper {
 
   static const _per = off.PerSize.oneHundredGrams;
 
-  /// Maps a product, or returns null if it cannot be logged honestly.
+  /// The language a name is preferred in. The fallback chain behind
+  /// [off.Product.getBestProductName] means a product named in no other
+  /// language is still usable.
+  static const _language = off.OpenFoodFactsLanguage.ENGLISH;
+
+  /// Maps a product, saying why when it cannot be mapped.
   ///
   /// Two rejections, both deliberate:
   ///
@@ -36,19 +41,28 @@ abstract final class OffMapper {
   ///   than a barcode and a photo. Mapping one of those to `kcal: 0` would add
   ///   a silent zero to the day's total, which is worse than not offering the
   ///   food at all — the user would believe they had logged their lunch.
-  static RemoteFood? fromProduct(off.Product product) {
-    final name = (product.productName ?? '').trim();
-    if (name.isEmpty) return null;
+  ///
+  /// Returns a [ProductLookup] rather than a nullable [RemoteFood] because the
+  /// caller has to tell the two apart: a nameless product is one the user can
+  /// name, and one with no energy figure is not. Collapsing both into `null`
+  /// is what made a failed scan indistinguishable from an unknown barcode.
+  static ProductLookup fromProduct(off.Product product) {
+    final name = _bestName(product);
+    if (name == null) return const ProductUnusable(UnusableReason.noName);
 
     final nutriments = product.nutriments;
-    if (nutriments == null) return null;
+    if (nutriments == null) {
+      return ProductUnusable(UnusableReason.noEnergy, name: name);
+    }
 
     final kcal = _kcal(nutriments);
-    if (kcal == null) return null;
+    if (kcal == null) {
+      return ProductUnusable(UnusableReason.noEnergy, name: name);
+    }
 
     final brand = _firstBrand(product.brands);
 
-    return RemoteFood(
+    return ProductFound(RemoteFood(
       name: name,
       brand: brand,
       barcode: product.barcode,
@@ -73,15 +87,50 @@ abstract final class OffMapper {
       imageUrl: product.imageFrontSmallUrl ?? product.imageFrontUrl,
       source: FoodSource.openFoodFacts,
       confidence: _confidence(nutriments),
-    );
+    ));
   }
 
   /// Maps a page of search results, dropping the ones that cannot be logged.
+  ///
+  /// A search result keeps no rejection reason: a list the user is scanning has
+  /// no use for a row that says why it is not there. The reason only matters
+  /// for a barcode, where the user asked about one specific product.
   static List<RemoteFood> fromProducts(Iterable<off.Product>? products) {
     if (products == null) return const [];
     return [
-      for (final p in products) ?fromProduct(p),
+      for (final p in products)
+        if (fromProduct(p) case ProductFound(:final food)) food,
     ];
+  }
+
+  /// The best name upstream offers, in any language, or null if it offers none.
+  ///
+  /// `productName` alone holds only the field for the language that was asked
+  /// for. A product named solely in Romanian or French arrives with that empty
+  /// and used to be rejected as nameless — the likeliest reason a scan of a
+  /// real product resolved to nothing at all.
+  ///
+  /// [off.Product.getBestProductName] covers English, the bare field and the
+  /// generic name, but it too only ever looks at the one language it is given.
+  /// So when it comes back empty, fall back to *any* language upstream has.
+  /// A name in a language the user did not ask for is still a name they will
+  /// recognise on the packet in their hand, and they can rename it afterwards.
+  static String? _bestName(off.Product product) {
+    final best = product.getBestProductName(_language).trim();
+    if (best.isNotEmpty) return best;
+
+    for (final names in [
+      product.productNameInLanguages,
+      product.genericNameInLanguages,
+    ]) {
+      if (names == null) continue;
+      for (final candidate in names.values) {
+        final trimmed = candidate.trim();
+        if (trimmed.isNotEmpty) return trimmed;
+      }
+    }
+
+    return null;
   }
 
   static double? _grams(off.Nutriments n, off.Nutrient nutrient) {

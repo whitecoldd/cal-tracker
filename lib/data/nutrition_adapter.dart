@@ -1,6 +1,8 @@
 import 'dart:convert';
 
+import '../domain/hydration.dart';
 import '../domain/nutrition.dart';
+import '../domain/portion.dart';
 import 'daos/journal_dao.dart';
 import 'database.dart';
 
@@ -34,6 +36,26 @@ extension ServingRow on LoggedItem {
 
 extension ServingRows on Iterable<LoggedItem> {
   Iterable<Serving> get servings => map((i) => i.serving);
+
+  /// The entries that were logged as a volume.
+  ///
+  /// A food counts as a drink because of **how it was logged**, not because of
+  /// anything on the food row — nothing there marks a food as a liquid, and
+  /// the same row can be a splash of milk or a glass of it.
+  ///
+  /// Grams and millilitres are the same number here, which is not a fudge:
+  /// [PortionUnit.millilitres] already declares one gram per millilitre, so the
+  /// app has been treating the two as interchangeable since T4 and `grams` on
+  /// one of these entries *is* the volume.
+  Iterable<Drink> get drinks => where(
+        (i) => i.entry.unit == PortionUnit.millilitres,
+      ).map(
+        (i) => Drink(
+          millilitres: i.entry.grams,
+          // alcoholG on the food is per 100g; the serving scales it.
+          alcoholG: i.serving.alcoholG,
+        ),
+      );
 }
 
 /// Counts additive tags in the stored JSON array.

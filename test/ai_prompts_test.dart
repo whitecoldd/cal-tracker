@@ -159,6 +159,35 @@ void main() {
       expect(Prompts.photoUser(null), isNot(contains('adds:')));
       expect(Prompts.photoUser('  '), isNot(contains('adds:')));
     });
+
+    test('breaks a cooked dish into its components', () {
+      // "Only what you can see" is right for a plate and wrong for a stew,
+      // where the components are by definition not individually visible. A
+      // model held to the stricter reading returns one opaque item, or none.
+      final system = Prompts.photoSystem().replaceAll(RegExp(r'\s+'), ' ');
+
+      expect(system, contains('single cooked dish'));
+      expect(system, contains('components it is ordinarily made of'));
+    });
+
+    test('an inferred component must be marked as one', () {
+      // What keeps the composite clause honest. The app already surfaces a
+      // low-confidence portion as one worth correcting.
+      final system = Prompts.photoSystem().replaceAll(RegExp(r'\s+'), ' ');
+
+      expect(system, contains('did not see directly a confidence of 0.5'));
+      expect(system, contains('prefer fewer, larger components'));
+    });
+
+    test('still refuses to invent what is out of frame', () {
+      // The composite clause must not have loosened this.
+      final system = Prompts.photoSystem().toLowerCase();
+      expect(system, contains('only what you can actually see'));
+      expect(
+        system.replaceAll(RegExp(r'\s+'), ' '),
+        contains('out of frame'),
+      );
+    });
   });
 
   group('the prompts say what the schema needs', () {

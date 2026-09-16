@@ -13,8 +13,11 @@ import 'remote_food.dart';
 /// the alternative is a test suite that needs the network, which would make the
 /// offline behaviour the one thing that is never tested.
 abstract interface class FoodRemote {
-  /// The product with this barcode, or null if upstream has never heard of it.
-  Future<RemoteFood?> byBarcode(String barcode);
+  /// What upstream holds for this barcode.
+  ///
+  /// Throws [RemoteUnavailable] if upstream could not be reached; every other
+  /// outcome, including "never heard of it", is a [ProductLookup].
+  Future<ProductLookup> byBarcode(String barcode);
 
   /// Free-text search.
   Future<List<RemoteFood>> search(String query, {int limit});
@@ -64,6 +67,12 @@ class OffFoodRemote implements FoodRemote {
   static const _fields = <off.ProductField>[
     off.ProductField.BARCODE,
     off.ProductField.NAME,
+    // Asking for the name in every language, and for the generic name, is what
+    // makes a product named only in Romanian or French usable. Without these
+    // two, `getBestProductName` has nothing to fall back to and the product is
+    // rejected as nameless.
+    off.ProductField.NAME_ALL_LANGUAGES,
+    off.ProductField.GENERIC_NAME,
     off.ProductField.BRANDS,
     off.ProductField.NUTRIMENTS,
     off.ProductField.NOVA_GROUP,
@@ -74,7 +83,7 @@ class OffFoodRemote implements FoodRemote {
   ];
 
   @override
-  Future<RemoteFood?> byBarcode(String barcode) async {
+  Future<ProductLookup> byBarcode(String barcode) async {
     configure();
 
     final result = await _guard(
@@ -89,7 +98,7 @@ class OffFoodRemote implements FoodRemote {
     );
 
     final product = result.product;
-    if (product == null) return null;
+    if (product == null) return const ProductUnknown();
     return OffMapper.fromProduct(product);
   }
 
@@ -135,6 +144,14 @@ class OffFoodRemote implements FoodRemote {
     } on FormatException {
       return Future<T>.error(const RemoteUnavailable('unreadable response'));
     } on Exception catch (e) {
+      return Future<T>.error(RemoteUnavailable('$e'));
+    } catch (e) {
+      // Deliberately catching `Error` too, which is normally a bug worth
+      // crashing on. Open Food Facts is crowd-sourced: a product with a string
+      // where the schema says a number surfaces here as a `TypeError`, not an
+      // `Exception`, and one of those escaping is a failure with no output at
+      // all in a minified release build. Upstream data is not our invariant to
+      // uphold, so it is reported as an unreachable upstream.
       return Future<T>.error(RemoteUnavailable('$e'));
     }
   }

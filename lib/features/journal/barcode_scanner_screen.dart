@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../theme/tokens.dart';
@@ -43,6 +44,9 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   /// once per frame and unwinds the whole navigator.
   bool _handled = false;
 
+  /// Set when a label was seen but could not be decoded.
+  bool _unreadable = false;
+
   @override
   void dispose() {
     _controller.dispose();
@@ -58,7 +62,27 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
     if (code == null) return;
 
     _handled = true;
+
+    // The one moment the user learns the read succeeded. Everything after this
+    // happens on the sheet behind, and without a tick here a lookup that finds
+    // nothing is indistinguishable from a camera that never read anything.
+    HapticFeedback.mediumImpact();
+
+    // A capture can arrive after the route has begun to pop — the user pressing
+    // back on the same frame as a successful read.
+    if (!mounted) return;
     Navigator.of(context).pop(code);
+  }
+
+  /// A barcode the camera saw but could not decode.
+  ///
+  /// [MobileScanner] silently discards these when no handler is given, so a
+  /// damaged or badly-lit label used to leave the preview running with nothing
+  /// to show for it. Not fatal — the next frame may well read — so it is said
+  /// once, quietly, under the reticle.
+  void _onDetectError(Object error, StackTrace stackTrace) {
+    if (!mounted || _handled) return;
+    setState(() => _unreadable = true);
   }
 
   @override
@@ -76,6 +100,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
           MobileScanner(
             controller: _controller,
             onDetect: _onDetect,
+            onDetectError: _onDetectError,
             errorBuilder: (context, error) => _CameraError(error: error),
           ),
           const _ScanReticle(),
@@ -84,9 +109,14 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
             right: Space.lg,
             bottom: Space.xl,
             child: Text(
-              'Hold the barcode inside the frame.',
+              _unreadable
+                  ? 'That mark will not be read. Hold steadier, or find better '
+                      'light.'
+                  : 'Hold the barcode inside the frame.',
               textAlign: TextAlign.center,
-              style: Type.lore(color: Hue.parchment),
+              style: Type.lore(
+                color: _unreadable ? Hue.adrenaline : Hue.parchment,
+              ),
             ),
           ),
         ],

@@ -7,6 +7,7 @@ import '../../data/database.dart';
 import '../../data/nutrition_adapter.dart';
 import '../../data/tables.dart';
 import '../../domain/day.dart';
+import '../../domain/food_query.dart';
 import '../../domain/nutrition.dart';
 import '../../providers/app_providers.dart';
 
@@ -19,14 +20,29 @@ final journalDayProvider = NotifierProvider<JournalDayNotifier, Day>(
 );
 
 class JournalDayNotifier extends Notifier<Day> {
+  int _lastShift = 0;
+
+  /// Which way the last move went: -1 back, +1 forward, 0 before any move.
+  ///
+  /// A plain field rather than a second provider, because two values that can
+  /// disagree is worse than one that cannot, and the rebuild-ordering question
+  /// a second provider raises has no good answer. It is only ever read during
+  /// the rebuild the day change itself caused, which is the one moment it
+  /// means anything — so the fact that it does not notify is correct rather
+  /// than a hazard.
+  int get lastShift => _lastShift;
+
   @override
   Day build() => Day.today();
 
-  void show(Day day) => state = day;
+  void show(Day day) {
+    _lastShift = day.isBefore(state) ? -1 : 1;
+    state = day;
+  }
 
-  void shift(int days) => state = state.addDays(days);
+  void shift(int days) => show(state.addDays(days));
 
-  void today() => state = Day.today();
+  void today() => show(Day.today());
 
   /// The Journal never shows the future: there is nothing to log there, and an
   /// empty tomorrow reads like data loss.
@@ -41,7 +57,7 @@ final journalEntriesProvider = StreamProvider<List<LoggedItem>>((ref) {
 
 /// A day's food, split into meal slots in serving order.
 class JournalDay {
-  const JournalDay({required this.day, required this.byMeal});
+  JournalDay({required this.day, required this.byMeal});
 
   factory JournalDay.from(Day day, List<LoggedItem> items) {
     final grouped = items.groupListsBy((i) => i.entry.mealSlot);
@@ -56,7 +72,16 @@ class JournalDay {
   final Day day;
   final Map<MealSlot, List<LoggedItem>> byMeal;
 
-  List<LoggedItem> get all => byMeal.values.expand((e) => e).toList();
+  late final List<LoggedItem> all =
+      byMeal.values.expand((e) => e).toList(growable: false);
+
+  /// What the day added up to.
+  ///
+  /// Carried here rather than read from [dailyTotalsProvider] so that a
+  /// rendered page is **one** value. Two providers settling independently is
+  /// what would let a day transition show the previous day's rows beside
+  /// zeroed totals for a frame.
+  late final DailyTotals totals = DailyTotals.of(all);
 
   bool get isEmpty => all.isEmpty;
 
@@ -133,14 +158,37 @@ final dailyTotalsProvider = Provider<DailyTotals>((ref) {
   );
 });
 
+/// Bumped whenever a food is written to the library.
+///
+/// Without it an open search sheet keeps serving a list assembled before the
+/// write: pick an Open Food Facts result, back out of the portion sheet, retype
+/// the same query, and the food that was just saved is not there. `autoDispose`
+/// alone does not cover that — the sheet never closed.
+final foodLibraryTickProvider =
+    NotifierProvider<FoodLibraryTick, int>(FoodLibraryTick.new);
+
+class FoodLibraryTick extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void changed() => state++;
+}
+
 /// Local food search: the user's own library and the seeded staples.
 ///
 /// This is steps one and two of the resolution order in CLAUDE.md §4. Anything
 /// found here costs nothing, which is what keeps the AI budget survivable.
+///
+/// Auto-disposing and keyed by query, for the reason spelled out on
+/// [remoteFoodSearchProvider]: without it every distinct string ever typed is
+/// cached for the life of the app.
 final foodSearchProvider =
-    FutureProvider.family<List<Food>, String>((ref, query) async {
-  if (query.trim().length < 2) return const [];
-  return ref.watch(databaseProvider).foodsDao.search(query);
+    FutureProvider.autoDispose.family<List<Food>, String>((ref, query) async {
+  ref.watch(foodLibraryTickProvider);
+
+  final parsed = parseFoodQuery(query);
+  if (parsed.isEmpty) return const [];
+  return ref.watch(databaseProvider).foodsDao.searchFor(parsed);
 });
 
 /// Foods logged most often, offered before the user types anything.

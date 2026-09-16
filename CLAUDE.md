@@ -71,8 +71,11 @@ is wrong, however convenient.
   to a live drift stream in a test: a live stream also schedules a
   zero-duration timer on cancel, which the binding reports as a leak.
 - Do not kill a `flutter test` run mid-flight. It can leave a half-copied
-  `sqlite3.dll` in `build/native_assets/`, and the next run dies with a
-  `PathExistsException`. If that happens, `rm -rf build/native_assets`.
+  `sqlite3.dll` in `build/native_assets/windows/`, and the next run dies with a
+  `PathExistsException`. If that happens, delete **only that file** —
+  `rm -f build/native_assets/windows/sqlite3.dll`. Never `rm -rf
+  build/native_assets`: that also takes `android/jniLibs/`, and §3 explains why
+  the next APK then ships without SQLite.
 - After every task: append an entry to `vault/90-Progress-Log.md` (see §6) in
   the same commit as the code. The vault lives in this repo, so this is one
   commit, not two — never commit code and leave the log entry for later.
@@ -97,11 +100,39 @@ at **2.34.x**. Therefore:
 
 - `drift` and `drift_dev` are both held at `>=2.34.0 <2.35.0`. They must move together.
 - `flutter_riverpod` stays on **2.6.1**. 3.4.1+ needs Dart 3.12.
-- `sqlite3` 3.5.2 self-builds via native assets. **Do not** add
+- `sqlite3` 3.5.2 ships SQLite itself via native assets. **Do not** add
   `sqlite3_flutter_libs` — it is end-of-life and only existed for sqlite3 2.x.
 
 If you genuinely need a newer package, the fix is upgrading Flutter — which is
 the user's call, because the same SDK serves their other projects. Ask first.
+
+### The native asset that can silently go missing
+
+`sqlite3` has no Android module. Its build hook downloads a prebuilt
+`libsqlite3.so` per ABI, and `flutter assemble` copies them into
+`build/native_assets/android/jniLibs/lib/<abi>/`, which the Flutter Gradle
+plugin registers as a `jniLibs` source directory. If that directory is empty
+when Gradle runs, **the build still succeeds**: Gradle has no idea a library was
+supposed to be there. The APK installs, then dies at the first query with
+`Failed to load dynamic library 'libsqlite3.so'` — which the user sees as
+"The Path is blocked" and nothing more.
+
+It goes empty because `flutter assemble`'s `install_code_assets` step declares
+only `native_assets.json` as its output (`InstallCodeAssets.outputs` in
+`flutter_tools/lib/src/build_system/targets/native_assets.dart`). Delete
+`build/native_assets/` and that stamp still looks valid, so the step is skipped
+on every subsequent build and the libraries are never copied back. This is how
+`app-release.apk` shipped without SQLite on 2026-09-15.
+
+So:
+
+- Never wipe `build/native_assets/` wholesale (see §2).
+- If it has been wiped, `rm -f .dart_tool/flutter_build/*/install_code_assets.stamp`
+  before rebuilding. `flutter clean` also works and is slower.
+- **After every `flutter build apk`, run `python tools/check_apk_libs.py`.** It
+  opens the APK and fails if an ABI carrying `libflutter.so` has no
+  `libsqlite3.so`. This is the only check that catches the failure before the
+  phone does — the analyzer, the tests and Gradle all pass on a broken APK.
 
 Android: `minSdk 26` (floor for Health Connect). `MainActivity` extends
 `FlutterFragmentActivity` — the health plugin needs a FragmentActivity to run

@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../../domain/food_query.dart';
 import '../database.dart';
 import '../tables.dart';
 
@@ -16,14 +17,12 @@ class FoodsDao extends DatabaseAccessor<AppDatabase> with _$FoodsDaoMixin {
   FoodsDao(super.db);
 
   /// Normalised lookup key for a name/brand pair.
-  static String searchKeyFor(String name, [String? brand]) {
-    final joined = brand == null || brand.isEmpty ? name : '$name $brand';
-    return joined
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9\s]'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-  }
+  ///
+  /// The rule itself lives in `domain/food_query.dart`, so a stored key and a
+  /// typed query cannot be normalised two different ways. Changing it there is
+  /// a migration: every key already on a device was written by the old one.
+  static String searchKeyFor(String name, [String? brand]) =>
+      normaliseSearchText(name, brand);
 
   Future<Food?> findByBarcode(String barcode) =>
       (select(foods)..where((f) => f.barcode.equals(barcode)))
@@ -32,28 +31,70 @@ class FoodsDao extends DatabaseAccessor<AppDatabase> with _$FoodsDaoMixin {
   Future<Food?> findById(int id) =>
       (select(foods)..where((f) => f.id.equals(id))).getSingleOrNull();
 
-  /// Local search, best source first.
+  /// How many rows are considered before ranking.
   ///
-  /// Ordering by [FoodSource] index descending puts a food the user corrected
-  /// by hand above a barcode result, and both above an AI estimate — so a good
-  /// answer already on the device is never passed over for a network call.
-  Future<List<Food>> search(String query, {int limit = 25}) {
-    final key = searchKeyFor(query);
-    if (key.isEmpty) return Future.value(const []);
+  /// Generous: the whole point of ranking in Dart is that the interesting
+  /// ordering cannot be expressed in the SQL, so the SQL must not be what
+  /// decides which rows are seen. The library is a few hundred rows.
+  static const int _candidateCap = 200;
 
-    return (select(foods)
-          ..where((f) => f.searchKey.like('%$key%'))
+  /// Local search.
+  Future<List<Food>> search(String query, {int limit = 25}) =>
+      searchFor(parseFoodQuery(query), limit: limit);
+
+  /// Local search for an already-parsed query.
+  ///
+  /// Every term must appear, in any order — which is what makes "white monster"
+  /// find `Monster Energy Ultra White`. The old query was a single `LIKE` over
+  /// the whole string, so a multi-word search only ever matched words that were
+  /// adjacent and in the order typed.
+  ///
+  /// The `WHERE` is N ANDed LIKEs so SQLite does the pruning; the *ranking* is
+  /// done in Dart. Two reasons for the split. The tier rule is a domain rule
+  /// and has to be testable without a database in the room. And the ordering
+  /// this replaces is the cautionary tale: its comment promised ordering by
+  /// source quality and there was no ordering term on `source` at all, so an AI
+  /// row at confidence 0.95 outranked a seed row at 0.9 — the exact inversion
+  /// the comment said could not happen. A comparator can be asserted on.
+  Future<List<Food>> searchFor(FoodQuery query, {int limit = 25}) async {
+    if (query.isEmpty) return const [];
+
+    // Terms are [a-z0-9] after normalisation, so `%` and `_` cannot appear in
+    // one; drift binds the pattern as a variable in any case. Nothing here
+    // needs "hardening".
+    final candidates = await (select(foods)
+          ..where(
+            (f) => query.terms
+                .map((t) => f.searchKey.like('%$t%'))
+                .reduce((a, b) => a & b),
+          )
           ..orderBy([
-            // Exact matches first, then by source quality, then by confidence.
-            (f) => OrderingTerm(
-                  expression: f.searchKey.equals(key),
-                  mode: OrderingMode.desc,
-                ),
-            (f) => OrderingTerm(expression: f.confidence, mode: OrderingMode.desc),
+            (f) => OrderingTerm(expression: f.source, mode: OrderingMode.desc),
+            (f) =>
+                OrderingTerm(expression: f.confidence, mode: OrderingMode.desc),
             (f) => OrderingTerm(expression: f.name),
           ])
-          ..limit(limit))
+          ..limit(_candidateCap))
         .get();
+
+    final ranked = candidates
+        .map((food) => (food: food, tier: matchTier(food.searchKey, query)))
+        .where((row) => row.tier != null)
+        .toList()
+      ..sort((a, b) {
+        final byTier = a.tier!.compareTo(b.tier!);
+        if (byTier != 0) return byTier;
+        // A food the user corrected by hand beats a barcode result, and both
+        // beat an AI estimate, so a good answer already on the device is never
+        // passed over.
+        final bySource = b.food.source.index.compareTo(a.food.source.index);
+        if (bySource != 0) return bySource;
+        final byConfidence = b.food.confidence.compareTo(a.food.confidence);
+        if (byConfidence != 0) return byConfidence;
+        return a.food.name.compareTo(b.food.name);
+      });
+
+    return [for (final row in ranked.take(limit)) row.food];
   }
 
   /// Every food, newest first. A one-shot read.

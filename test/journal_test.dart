@@ -1,3 +1,4 @@
+import 'package:cal_tracker/data/daos/journal_dao.dart';
 import 'package:cal_tracker/data/database.dart';
 import 'package:cal_tracker/data/nutrition_adapter.dart';
 import 'package:cal_tracker/data/tables.dart';
@@ -7,6 +8,7 @@ import 'package:cal_tracker/domain/portion.dart';
 import 'package:cal_tracker/features/activity/activity_providers.dart';
 import 'package:cal_tracker/features/journal/journal_providers.dart';
 import 'package:cal_tracker/features/journal/journal_screen.dart';
+import 'package:cal_tracker/features/journal/water_providers.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
 import 'package:clock/clock.dart';
@@ -300,6 +302,9 @@ void main() {
             // async never lets that query finish. See CLAUDE.md §2.
             dayActivityProvider.overrideWith((ref) async => ActivityView.empty),
             dayActivityIsManualProvider.overrideWith((ref) async => false),
+            // The waterskin reads a live query stream, which fake async never
+            // lets finish and which leaks a timer on cancel. Same rule.
+            waterLogProvider.overrideWith((ref) => Stream.value(null)),
           ],
           child: MaterialApp(
             theme: AppTheme.build(),
@@ -391,6 +396,159 @@ void main() {
           reason: 'singular, since exactly one entry is vague',
         );
       });
+    });
+  });
+
+  group('turning the page', () {
+    // The app's first animation outside onboarding. What is asserted here is
+    // the direction rule and the absence of a blank frame -- both observable,
+    // neither a screenshot.
+
+    test('the notifier remembers which way it last moved', () {
+      final notifier = container.read(journalDayProvider.notifier);
+
+      notifier.shift(-1);
+      expect(notifier.lastShift, -1);
+
+      notifier.shift(1);
+      expect(notifier.lastShift, 1);
+    });
+
+    test('returning to today from the past counts as forward', () {
+      final notifier = container.read(journalDayProvider.notifier);
+
+      notifier.shift(-3);
+      notifier.today();
+      expect(notifier.lastShift, 1);
+    });
+
+    test('show() works out the direction from the day it is given', () {
+      final notifier = container.read(journalDayProvider.notifier);
+
+      notifier.show(Day.today().addDays(-5));
+      expect(notifier.lastShift, -1);
+    });
+
+    /// The nested `real` helper lives in another group; database work in a
+    /// widget-test body still has to run on the real event loop (CLAUDE.md §2).
+    Future<T> real<T>(WidgetTester tester, Future<T> Function() body) async {
+      late T result;
+      await tester.runAsync(() async => result = await body());
+      return result;
+    }
+
+    testWidgets('the body does not blank while the next day loads',
+        (tester) async {
+      // The regression test for the trap this task exists around. When the
+      // cursor moves, journalEntriesProvider is recreated, and Riverpod's
+      // whenData on a loading state yields a plain loading state -- previous
+      // data is NOT carried through -- so a direct switch on the AsyncValue
+      // falls to its empty arm and the screen goes blank for a frame.
+      final oats = await real(tester, () async {
+        final id = await addFood('Oats', kcal: 400);
+        await log(id, quantity: 100, slot: MealSlot.breakfast);
+        return db.journalDao.forDay(_today);
+      });
+
+      await withClock(Clock.fixed(DateTime(2026, 9, 14, 12)), () async {
+        tester.view.physicalSize = const Size(1080, 2400);
+        tester.view.devicePixelRatio = 3;
+        addTearDown(tester.view.reset);
+
+        // A stream that never emits again, which is what a day with no data
+        // looks like to the page while the next query is in flight.
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              databaseProvider.overrideWithValue(db),
+              journalEntriesProvider.overrideWith(
+                (ref) => ref.watch(journalDayProvider) == _today
+                    ? Stream.value(oats)
+                    : const Stream<List<LoggedItem>>.empty(),
+              ),
+              dayActivityProvider
+                  .overrideWith((ref) async => ActivityView.empty),
+              dayActivityIsManualProvider.overrideWith((ref) async => false),
+              waterLogProvider.overrideWith((ref) => Stream.value(null)),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.build(),
+              home: const JournalScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Oats'), findsOneWidget);
+
+        await tester.tap(find.byTooltip('Previous day'));
+        await tester.pump(const Duration(milliseconds: 1));
+
+        // The previous day's page is still on screen, mid-transition, rather
+        // than the screen having emptied.
+        expect(find.text('Oats'), findsWidgets);
+      });
+    });
+
+    testWidgets('the page slides in from the side it was turned from',
+        (tester) async {
+      final items = await real(tester, () => db.journalDao.forDay(_today));
+
+      await withClock(Clock.fixed(DateTime(2026, 9, 14, 12)), () async {
+        tester.view.physicalSize = const Size(1080, 2400);
+        tester.view.devicePixelRatio = 3;
+        addTearDown(tester.view.reset);
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              databaseProvider.overrideWithValue(db),
+              journalEntriesProvider.overrideWith((ref) => Stream.value(items)),
+              dayActivityProvider
+                  .overrideWith((ref) async => ActivityView.empty),
+              dayActivityIsManualProvider.overrideWith((ref) async => false),
+              waterLogProvider.overrideWith((ref) => Stream.value(null)),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.build(),
+              home: const JournalScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        double incomingDx() {
+          final transitions = tester
+              .widgetList<SlideTransition>(find.byType(SlideTransition))
+              .toList();
+          return transitions
+              .map((t) => t.position.value.dx)
+              .reduce((a, b) => a.abs() > b.abs() ? a : b);
+        }
+
+        await tester.tap(find.byTooltip('Previous day'));
+        await tester.pump(const Duration(milliseconds: 1));
+        // Going back: the new page enters from the left.
+        expect(incomingDx(), lessThan(0));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byTooltip('Next day'));
+        await tester.pump(const Duration(milliseconds: 1));
+        expect(incomingDx(), greaterThan(0));
+        await tester.pumpAndSettle();
+      });
+    });
+
+    test('a page carries its own totals', () async {
+      // Folded into JournalDay so a rendered page is one value. Two providers
+      // settling independently is what would show the previous day's rows
+      // beside zeroed totals for a frame.
+      final oats = await addFood('Oats', kcal: 400);
+      await log(oats, quantity: 100, slot: MealSlot.breakfast);
+      final items = await db.journalDao.forDay(_today);
+
+      final page = JournalDay.from(_today, items);
+      expect(page.totals.kcal, DailyTotals.of(items).kcal);
+      expect(page.totals.kcal, 400);
     });
   });
 }

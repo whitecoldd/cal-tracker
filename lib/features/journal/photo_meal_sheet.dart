@@ -18,6 +18,7 @@ import '../../theme/typography.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/witcher_button.dart';
 import '../ai/ai_providers.dart';
+import 'journal_providers.dart';
 import 'meal_confirm.dart';
 
 /// Log a meal by photographing it.
@@ -120,6 +121,9 @@ class _PhotoMealSheetState extends ConsumerState<PhotoMealSheet> {
             note: _note.text,
           );
       final resolved = await ref.read(mealResolverProvider).resolve(meal);
+      // The resolver writes anything new into the library, so an open search
+      // sheet must not keep serving a list assembled before that.
+      ref.read(foodLibraryTickProvider.notifier).changed();
 
       if (!mounted) return;
       setState(() {
