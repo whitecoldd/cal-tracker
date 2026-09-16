@@ -2219,3 +2219,59 @@ task was about the picture the app already took and threw away.
 except the gallery**, which is the check that the claim holds: the Journal
 golden's entries were typed, so nothing on it should have moved, and nothing
 did.
+
+---
+
+## T30 — The digits the scan threw away
+**Date:** 2026-09-16
+
+Two products scanned off a Moldovan shelf came back with nothing: Banzai salted
+almonds and a Monster Energy Ultra. The sheet said so — T21 already made sure a
+miss was visible rather than painted behind the sheet — and then discarded the
+one thing the user could act on. 862 → 868 tests.
+
+**A barcode miss is a claim, and the user could not check it.** Open Food Facts
+answers to the number, not to the packet. Without the digits on screen there was
+no way to see whether the code was genuinely absent, to look it up on another
+device, or to file it upstream later. `_ScannedSigil` shows it, selectably, with
+a copy button — and the copy button acknowledges itself, because a clipboard
+write is invisible and an unacknowledged one looks broken.
+
+**The digits outlive the offer to write the food down.** `_scannedCode` is held
+apart from `_offerToWrite` for the `BarcodeOffline` branch: there is no food to
+name, so there is nothing to offer, and there is still a barcode worth keeping.
+`_say` now takes the code and **clears it when absent**, so a notice from the
+model or a failed write-back cannot inherit the number from the last scan.
+
+**Searching for the name upstream did give.** A `ProductUnusable` carrying a
+name now offers `SEEK "<name>"`, which fills the search box and runs the normal
+order — library first, then the wider ledger. The barcode is one packet and
+upstream has failed it; the name reaches the rest of the brand, where somebody
+may well have filled a sibling code in. Offered **only** where there is a name:
+a nameless product gets no button, because one searching for `""` would be a
+dead end wearing a way out.
+
+**What the two products actually are, checked against the live API:**
+
+- `4840811001867` (Banzai almonds) — `product_not_found`. A clean miss. The
+  brand *is* in Open Food Facts on the Moldovan `484` prefix, but seeds, not
+  almonds.
+- `5060947547162` (Monster Ultra) — **found**, and holds `countries_tags:
+  ["en:moldova"]` and nothing else. No name, no brands, no nutriments. It takes
+  the `UnusableReason.noName` branch, not the unknown one.
+
+So the two failures were never the same failure, and the second one is an empty
+row upstream waiting for exactly what the manual sheet already collects. That is
+the argument for the contribute-back task, and the reason these two barcodes are
+written down here.
+
+**Country tags were considered and rejected as a fix.** Binding a country to a
+product cannot find a product that is not there — filtering only ever shrinks a
+result set, and this one is empty. The GS1 prefix already carries the signal
+(`484` is Moldova; it is how the Banzai rows were found). A country field earns
+its place in *ranking name search*, which is a different feature from the one
+that failed, and it is never bound to a shop: where the user buys food is
+personal location data and §6 keeps that out of this repo.
+
+**Verified:** `flutter analyze` clean, 868 tests green. No golden changed — the
+notice only exists after a scan, and no golden scans.

@@ -12,6 +12,7 @@ import 'package:cal_tracker/theme/app_theme.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -170,6 +171,142 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.textContaining('in no ledger'), findsNothing);
+    });
+
+    // A miss used to end with a sentence and nothing else: the digits the
+    // camera had just read were discarded, so the user could not check the
+    // packet against Open Food Facts, search for it elsewhere, or file it
+    // upstream. These pin the number to the notice.
+
+    testWidgets('shows the digits it read', (tester) async {
+      await pump(
+        tester,
+        lookup: const ProductUnknown(),
+        scanned: '4840811001867',
+      );
+
+      await tester.tap(find.byTooltip('Scan a barcode'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('4840811001867').hitTestable(), findsOneWidget);
+    });
+
+    testWidgets('keeps the digits when upstream cannot be reached',
+        (tester) async {
+      // The branch with no food to offer to write down. It still read a
+      // barcode, and that is the one thing worth keeping from the attempt.
+      await pump(
+        tester,
+        failure: const RemoteUnavailable('no connection'),
+        scanned: '5060947547162',
+      );
+
+      await tester.tap(find.byTooltip('Scan a barcode'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('5060947547162').hitTestable(), findsOneWidget);
+    });
+
+    testWidgets('copying the digits puts them on the clipboard', (tester) async {
+      // There is no clipboard behind a widget test, and `Clipboard.setData`
+      // never completes without a handler — so the button's own state change
+      // never runs. Standing one up is also what lets the test assert the
+      // digits actually left the app rather than that a label flipped.
+      final copied = <MethodCall>[];
+      tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+        SystemChannels.platform,
+        (call) async {
+          if (call.method == 'Clipboard.setData') copied.add(call);
+          return null;
+        },
+      );
+      addTearDown(
+        () => tester.binding.defaultBinaryMessenger
+            .setMockMethodCallHandler(SystemChannels.platform, null),
+      );
+
+      await pump(
+        tester,
+        lookup: const ProductUnknown(),
+        scanned: '4840811001867',
+      );
+
+      await tester.tap(find.byTooltip('Scan a barcode'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('SIGIL — COPIED'), findsNothing);
+
+      await tester.tap(find.byTooltip('Copy the barcode'));
+      await tester.pumpAndSettle();
+
+      final args = copied.single.arguments as Map<Object?, Object?>;
+      expect(args['text'], '4840811001867');
+      // A clipboard write is invisible. Without an acknowledgement the button
+      // is indistinguishable from one that does nothing.
+      expect(find.text('SIGIL — COPIED'), findsOneWidget);
+    });
+
+    testWidgets('typing again clears the digits of the last scan',
+        (tester) async {
+      await pump(
+        tester,
+        lookup: const ProductUnknown(),
+        scanned: '4840811001867',
+      );
+
+      await tester.tap(find.byTooltip('Scan a barcode'));
+      await tester.pumpAndSettle();
+      expect(find.text('4840811001867'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), 'almonds');
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      expect(find.text('4840811001867'), findsNothing);
+    });
+
+    testWidgets('a name upstream gave can be searched for', (tester) async {
+      // The barcode is one packet and upstream has failed it; the name reaches
+      // the rest of the brand, which is often the same food under a code
+      // somebody did fill in.
+      await tester.runAsync(() => addFood('Salted almonds'));
+      await pump(
+        tester,
+        lookup: const ProductUnusable(
+          UnusableReason.noEnergy,
+          name: 'Salted almonds',
+        ),
+      );
+
+      await tester.tap(find.byTooltip('Scan a barcode'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('SEEK "SALTED ALMONDS"'));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.pumpAndSettle();
+
+      final field = tester.widget<TextField>(find.byType(TextField));
+      expect(field.controller!.text, 'Salted almonds');
+      expect(find.text('IN THE LIBRARY'), findsOneWidget);
+    });
+
+    testWidgets('a nameless product offers nothing to search for',
+        (tester) async {
+      // What Open Food Facts actually holds for some barcodes: a code, a
+      // country tag and nothing else. There is no name, so a search button
+      // here would be a dead end wearing a way out.
+      await pump(
+        tester,
+        lookup: const ProductUnusable(UnusableReason.noName),
+        scanned: '5060947547162',
+      );
+
+      await tester.tap(find.byTooltip('Scan a barcode'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('SEEK'), findsNothing);
+      expect(find.text('RECORD IT YOURSELF'), findsOneWidget);
+      expect(find.text('5060947547162').hitTestable(), findsOneWidget);
     });
 
     testWidgets('a found product is logged rather than announced',

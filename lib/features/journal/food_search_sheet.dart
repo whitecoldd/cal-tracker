@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database.dart';
@@ -77,6 +78,18 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
   /// made a failed scan a dead end.
   ({String? name, String? barcode})? _offerToWrite;
 
+  /// The digits of the last scan that did not end in a logged food.
+  ///
+  /// Shown, and copyable, because until now a miss swallowed the one piece of
+  /// evidence the user could act on. Open Food Facts is crowd-sourced and
+  /// answers to the number, not to the packet: with the digits in hand the
+  /// product can be looked up, corrected or filed upstream. Without them a
+  /// miss is unappealable.
+  ///
+  /// Held apart from [_offerToWrite] on purpose — an unreachable upstream has
+  /// no food to offer to write down, and still has a barcode worth keeping.
+  String? _scannedCode;
+
   /// What to tell the user about the last thing that did not work.
   ///
   /// Rendered inside this sheet rather than sent to a SnackBar. The sheet is
@@ -120,6 +133,7 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
       // typed now.
       _notice = null;
       _offerToWrite = null;
+      _scannedCode = null;
     });
   }
 
@@ -200,6 +214,7 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
       _busy = true;
       _notice = null;
       _offerToWrite = null;
+      _scannedCode = null;
     });
     try {
       final outcome = await ref.read(barcodeLookupProvider(code).future);
@@ -214,7 +229,7 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
           // the search box is about something else.
           await _pick(food, carryQuantity: false);
         case BarcodeUnknown():
-          _say('That sigil is in no ledger the app can reach.');
+          _say('That sigil is in no ledger the app can reach.', code: code);
           setState(() => _offerToWrite = (name: null, barcode: code));
         case BarcodeUnusable(:final name):
           _say(
@@ -223,12 +238,19 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                       'nothing.'
                 : 'The ledger knows it as "$name" but records no energy for '
                       'it. Logging it would add a silent zero to the day.',
+            code: code,
           );
           setState(() => _offerToWrite = (name: name, barcode: code));
         case BarcodeOffline():
-          _say('Unknown here, and the wider world is out of reach.');
+          _say(
+            'Unknown here, and the wider world is out of reach.',
+            code: code,
+          );
         case BarcodeNotStored():
-          _say('The ledger answered, but it could not be written down.');
+          _say(
+            'The ledger answered, but it could not be written down.',
+            code: code,
+          );
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -253,8 +275,31 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
     await _pick(stored, carryQuantity: barcode == null);
   }
 
-  void _say(String message) {
-    if (mounted) setState(() => _notice = message);
+  /// Shows a notice, and with it the barcode it is about.
+  ///
+  /// [code] is cleared when absent rather than left alone: a notice from the
+  /// model or a write-back has nothing to do with the last scan, and a stale
+  /// number under it would read as though it did.
+  void _say(String message, {String? code}) {
+    if (!mounted) return;
+    setState(() {
+      _notice = message;
+      _scannedCode = code;
+    });
+  }
+
+  /// Searches for what upstream managed to call the product.
+  ///
+  /// Offered when a barcode resolved to a row too thin to log but carrying a
+  /// name. The number is one specific packet and upstream has failed it, but
+  /// the name reaches the rest of the brand — which is often the same food
+  /// under a barcode somebody did fill in. It costs nothing: the search runs
+  /// the local library first and the query is one the sheet was built to take.
+  void _searchForName(String name) {
+    _controller.text = name;
+    _controller.selection =
+        TextSelection.collapsed(offset: _controller.text.length);
+    _setQuery(name);
   }
 
   @override
@@ -348,15 +393,25 @@ class _FoodSearchSheetState extends ConsumerState<FoodSearchSheet> {
                         SliverToBoxAdapter(
                           child: _Notice(
                             message: notice,
+                            barcode: _scannedCode,
                             onWriteItDown: _offerToWrite == null
                                 ? null
                                 : () => _writeByHand(
                                     name: _offerToWrite!.name,
                                     barcode: _offerToWrite!.barcode,
                                   ),
+                            // Only where upstream gave a name. A scan that
+                            // came back nameless has nothing to search for,
+                            // and a button that searches for "" would be a
+                            // dead end wearing a way out.
+                            searchableName: _offerToWrite?.name,
+                            onSearchByName: _offerToWrite?.name == null
+                                ? null
+                                : () => _searchForName(_offerToWrite!.name!),
                             onDismiss: () => setState(() {
                               _notice = null;
                               _offerToWrite = null;
+                              _scannedCode = null;
                             }),
                           ),
                         ),
@@ -504,16 +559,30 @@ class _Notice extends StatelessWidget {
   const _Notice({
     required this.message,
     required this.onDismiss,
+    this.barcode,
     this.onWriteItDown,
+    this.searchableName,
+    this.onSearchByName,
   });
 
   final String message;
   final VoidCallback onDismiss;
 
+  /// The digits that were scanned, when the notice is about a scan.
+  ///
+  /// Shown rather than kept, because the number is the only key Open Food
+  /// Facts answers to and the user is the one standing in front of the packet.
+  final String? barcode;
+
   /// Offered when there is something to write down — a scan that ended without
   /// a food, which is the only case where the app knows a barcode nothing
   /// answers to.
   final VoidCallback? onWriteItDown;
+
+  /// The name upstream gave, when it gave one worth searching for.
+  final String? searchableName;
+
+  final VoidCallback? onSearchByName;
 
   @override
   Widget build(BuildContext context) {
@@ -539,6 +608,18 @@ class _Notice extends StatelessWidget {
                 ),
               ],
             ),
+            if (barcode case final code?) ...[
+              const SizedBox(height: Space.sm),
+              _ScannedSigil(barcode: code),
+            ],
+            if (onSearchByName != null && searchableName != null) ...[
+              const SizedBox(height: Space.sm),
+              WitcherButton(
+                label: 'SEEK "${searchableName!.toUpperCase()}"',
+                icon: Icons.search,
+                onPressed: onSearchByName,
+              ),
+            ],
             if (onWriteItDown != null) ...[
               const SizedBox(height: Space.sm),
               WitcherButton(
@@ -550,6 +631,73 @@ class _Notice extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// The digits of a scan that found nothing, kept where the user can read and
+/// copy them.
+///
+/// Small, and the whole point of the notice it sits in. A barcode miss used to
+/// end with a sentence and no evidence: the number the app had just read was
+/// discarded, so there was no way to check whether the packet was genuinely
+/// absent from Open Food Facts, to search for it on another device, or to file
+/// it upstream. Thirteen digits is the difference between a dead end and a
+/// thing the user can go and fix.
+class _ScannedSigil extends StatefulWidget {
+  const _ScannedSigil({required this.barcode});
+
+  final String barcode;
+
+  @override
+  State<_ScannedSigil> createState() => _ScannedSigilState();
+}
+
+class _ScannedSigilState extends State<_ScannedSigil> {
+  /// Set once the digits have been copied, so the tap has an answer.
+  ///
+  /// A clipboard write is invisible, and on Android 13 and up the system
+  /// paste-confirmation toast does not appear for every app. Without this the
+  /// button looks broken to anyone who does not immediately paste.
+  bool _copied = false;
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: widget.barcode));
+    if (mounted) setState(() => _copied = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _copied ? 'SIGIL — COPIED' : 'THE SIGIL READ',
+                style: Type.label(
+                  color: _copied ? Hue.gold : Hue.parchmentFaint,
+                ),
+              ),
+              const SizedBox(height: 2),
+              // SelectableText so the digits can be taken without the button
+              // too — the copy affordance is a convenience, not the only way.
+              SelectableText(
+                widget.barcode,
+                style: Type.numeral(size: 15, color: Hue.parchment),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          onPressed: _copy,
+          icon: Icon(_copied ? Icons.check : Icons.copy_outlined, size: 16),
+          color: _copied ? Hue.gold : Hue.parchmentDim,
+          tooltip: 'Copy the barcode',
+          visualDensity: VisualDensity.compact,
+        ),
+      ],
     );
   }
 }
