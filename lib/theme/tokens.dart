@@ -97,6 +97,28 @@ abstract final class Geometry {
   static const double radius = 2;
 }
 
+/// How photographs are treated.
+///
+/// A photograph is the one thing in this app that does not come from the
+/// palette — it arrives from a supermarket database or a phone camera, at full
+/// saturation, and dropped on void black it fights every other surface. So it
+/// is pulled towards the palette before it is drawn, the same way a colour
+/// would be pulled from [Hue] rather than written as a literal.
+abstract final class Filters {
+  /// How much colour survives. Not zero: a fully grey plate loses the one
+  /// thing a photograph is for, which is recognising the food at a glance.
+  static const double saturation = 0.45;
+
+  /// The standard luminance weights, blended towards identity at
+  /// [saturation]. Written out because `ColorFilter.matrix` wants a const list.
+  static const List<double> weathered = <double>[
+    0.2126 + 0.7874 * saturation, 0.7152 - 0.7152 * saturation, 0.0722 - 0.0722 * saturation, 0, 0, //
+    0.2126 - 0.2126 * saturation, 0.7152 + 0.2848 * saturation, 0.0722 - 0.0722 * saturation, 0, 0, //
+    0.2126 - 0.2126 * saturation, 0.7152 - 0.7152 * saturation, 0.0722 + 0.9278 * saturation, 0, 0, //
+    0, 0, 0, 1, 0, //
+  ];
+}
+
 /// How the app moves.
 ///
 /// Centralised for the same reason colour is: a duration picked per widget

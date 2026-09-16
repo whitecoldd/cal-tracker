@@ -71,6 +71,17 @@ class ImageCompressor implements PhotoCompressor {
   }
 }
 
+/// A photograph ready to send, and the bytes that were sent.
+class PreparedPhoto {
+  const PreparedPhoto({required this.jpeg, required this.dataUri});
+
+  /// Compressed, re-encoded, and stripped of EXIF.
+  final Uint8List jpeg;
+
+  /// The same bytes as the vision API wants them.
+  final String dataUri;
+}
+
 /// Prepares a photo for a vision request.
 class ImagePrep {
   const ImagePrep({PhotoCompressor compressor = const ImageCompressor()})
@@ -78,17 +89,25 @@ class ImagePrep {
 
   final PhotoCompressor _compressor;
 
-  /// Compresses [original] and returns it as a `data:` URI.
+  /// Compresses [original] and returns both what to send and what to keep.
   ///
   /// Throws [ImageTooLarge] rather than sending something that would spend a
   /// request on a request that fails.
-  Future<String> prepare(Uint8List original) async {
+  ///
+  /// It hands back the JPEG as well as the URI because the compressed bytes
+  /// are the right thing to *store*: they are already the smallest version
+  /// that still shows the meal, and they have had their EXIF stripped by
+  /// [ImageCompressor] — so the copy kept on the phone cannot carry the GPS
+  /// coordinates of the user's kitchen either. Compressing a second time to get
+  /// them would be the same work twice and a second chance to disagree.
+  Future<PreparedPhoto> prepare(Uint8List original) async {
     if (original.length < ImagePolicy.minBytes) {
       throw const ImageTooLarge(0);
     }
 
     final compressed = await _compressor.compress(original);
-    return toDataUri(compressed);
+
+    return PreparedPhoto(jpeg: compressed, dataUri: toDataUri(compressed));
   }
 
   /// Wraps JPEG bytes as a `data:` URI, checking the size cap.

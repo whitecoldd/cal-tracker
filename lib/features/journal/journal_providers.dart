@@ -1,5 +1,6 @@
 import 'package:clock/clock.dart';
 import 'package:collection/collection.dart';
+import 'package:flutter/widgets.dart' show FileImage, ImageProvider;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/daos/journal_dao.dart';
@@ -10,6 +11,7 @@ import '../../domain/day.dart';
 import '../../domain/food_query.dart';
 import '../../domain/nutrition.dart';
 import '../../providers/app_providers.dart';
+import '../ai/ai_providers.dart';
 
 /// The day the Journal is showing.
 ///
@@ -214,4 +216,23 @@ final recentFoodsProvider = FutureProvider<List<Food>>((ref) async {
     ..sort((a, b) => counts[b]!.compareTo(counts[a]!));
 
   return [for (final id in ranked.take(12)) foods[id]!];
+});
+
+/// The picture an entry was logged from, if it still exists.
+///
+/// Keyed on the recorded relative path. Hands back an [ImageProvider] rather
+/// than a [File] so a widget test can substitute one that decodes
+/// synchronously — the same seam, and the same reason, as
+/// `creaturePlateProvider`.
+///
+/// A path that resolves to nothing yields null and the row simply has no
+/// thumbnail. That is the normal state after a restore: the mirror carries
+/// table rows and a Markdown journal, never binaries, so the entries come back
+/// and their photographs do not. The entry is still true; only its souvenir is
+/// gone, and an error where a picture used to be would be a worse answer than
+/// silence.
+final mealPhotoProvider =
+    FutureProvider.family<ImageProvider?, String>((ref, path) async {
+  final file = await ref.watch(mealPhotoStoreProvider).resolve(path);
+  return file == null ? null : FileImage(file);
 });

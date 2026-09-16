@@ -33,10 +33,6 @@ class CreaturePlate extends StatelessWidget {
 
   final double height;
 
-  /// How much colour survives. Not zero: a fully grey plate loses the one
-  /// thing a photograph is for, which is recognising the food at a glance.
-  static const double _saturation = 0.45;
-
   @override
   Widget build(BuildContext context) {
     final image = this.image;
@@ -54,7 +50,7 @@ class CreaturePlate extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             ColorFiltered(
-              colorFilter: const ColorFilter.matrix(_desaturate),
+              colorFilter: const ColorFilter.matrix(Filters.weathered),
               child: Image(
                 image: image,
                 fit: BoxFit.cover,
@@ -85,16 +81,4 @@ class CreaturePlate extends StatelessWidget {
       ),
     );
   }
-
-  /// A saturation matrix at [_saturation], with the whole thing dimmed.
-  ///
-  /// Written out rather than composed at runtime because a `ColorFilter.matrix`
-  /// wants a const list and the numbers are stable — they are the standard
-  /// luminance weights, blended towards identity.
-  static const List<double> _desaturate = <double>[
-    0.2126 + 0.7874 * _saturation, 0.7152 - 0.7152 * _saturation, 0.0722 - 0.0722 * _saturation, 0, 0, //
-    0.2126 - 0.2126 * _saturation, 0.7152 + 0.2848 * _saturation, 0.0722 - 0.0722 * _saturation, 0, 0, //
-    0.2126 - 0.2126 * _saturation, 0.7152 - 0.7152 * _saturation, 0.0722 + 0.9278 * _saturation, 0, 0, //
-    0, 0, 0, 1, 0, //
-  ];
 }

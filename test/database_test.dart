@@ -680,6 +680,45 @@ void main() {
       expect(await db.weeksDao.mutagensForWeek(weekStart), isEmpty);
     });
 
+    test('photographs still in use are listed once each', () async {
+      // The sweep's whole input. One picture is shared by every entry the
+      // photograph produced, so this has to collapse them rather than report a
+      // path per row — and it must not list the entries that were typed.
+      final food = await db.foodsDao.upsert(
+        FoodsCompanion.insert(
+          name: 'Stew',
+          searchKey: 'stew',
+          kcal: 120,
+          source: FoodSource.manual,
+          createdAt: _now,
+          updatedAt: _now,
+        ),
+      );
+
+      Future<void> log({String? photo}) => db.journalDao.add(
+            EntriesCompanion.insert(
+              foodId: food,
+              day: weekStart,
+              mealSlot: MealSlot.dinner,
+              quantity: 100,
+              unit: PortionUnit.grams,
+              grams: 100,
+              photoPath: Value(photo),
+              createdAt: _now,
+            ),
+          );
+
+      await log(photo: 'meals/a.jpg');
+      await log(photo: 'meals/a.jpg');
+      await log(photo: 'meals/b.jpg');
+      await log();
+
+      expect(
+        await db.journalDao.photoPathsInUse(),
+        {'meals/a.jpg', 'meals/b.jpg'},
+      );
+    });
+
     test('a code this build no longer knows is dropped, not surfaced', () async {
       // A perk removed in a later version should disappear rather than haunt
       // the sheet as a blank row or crash the bonus maths.

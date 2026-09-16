@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'features/ai/ai_providers.dart';
 import 'features/backup/backup_providers.dart';
 import 'features/backup/restore_offer_screen.dart';
 import 'features/journal/journal_screen.dart';
@@ -81,6 +82,7 @@ class _RoutedState extends ConsumerState<_Routed> with WidgetsBindingObserver {
     // per meal for a file nobody reads between meals.
     if (state == AppLifecycleState.paused) {
       unawaited(_mirror());
+      unawaited(_sweepPhotos());
     }
   }
 
@@ -89,6 +91,18 @@ class _RoutedState extends ConsumerState<_Routed> with WidgetsBindingObserver {
     // Quietly does nothing without access, which is the common case until the
     // user has been to Settings.
     await service.writeMirror();
+  }
+
+  /// Deletes photographs no entry points at any more.
+  ///
+  /// Here rather than on deleting an entry, because one photograph belongs to
+  /// several entries — a dish breaks into its components and they all carry the
+  /// same path — so no single deletion can decide the file is unwanted. The same
+  /// moment as the mirror, and for the same reason: the user has finished
+  /// changing things and the process is still alive.
+  Future<void> _sweepPhotos() async {
+    final inUse = await ref.read(databaseProvider).journalDao.photoPathsInUse();
+    await ref.read(mealPhotoStoreProvider).prune(inUse);
   }
 
   @override

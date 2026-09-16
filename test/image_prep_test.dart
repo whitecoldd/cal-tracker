@@ -55,10 +55,22 @@ void main() {
       final compressor = _FakeCompressor(_bytes(120));
       final prep = ImagePrep(compressor: compressor);
 
-      final uri = await prep.prepare(_bytes(3 * 1024 * 1024));
+      final prepared = await prep.prepare(_bytes(3 * 1024 * 1024));
 
       expect(compressor.sawBytes, [3 * 1024 * 1024]);
-      expect(base64Decode(uri.split(',').last), hasLength(120));
+      expect(base64Decode(prepared.dataUri.split(',').last), hasLength(120));
+    });
+
+    test('the bytes kept are the same bytes sent', () async {
+      // The copy stored on the phone is the compressed one, so it is small and
+      // it has had its EXIF stripped. Compressing a second time to get it would
+      // be the same work twice and a second chance to disagree.
+      final prep = ImagePrep(compressor: _FakeCompressor(_bytes(120)));
+
+      final prepared = await prep.prepare(_bytes(3 * 1024 * 1024));
+
+      expect(prepared.jpeg, hasLength(120));
+      expect(base64Decode(prepared.dataUri.split(',').last), prepared.jpeg);
     });
 
     test('rejects something too small to be a photograph', () async {

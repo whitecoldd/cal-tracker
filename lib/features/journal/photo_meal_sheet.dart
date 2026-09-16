@@ -79,6 +79,9 @@ class _PhotoMealSheetState extends ConsumerState<PhotoMealSheet> {
     super.dispose();
   }
 
+  /// What was sent to the model, held so it can be written down on logging.
+  PreparedPhoto? _prepared;
+
   Future<void> _pick(ImageSource source) async {
     // The camera permission is requested by image_picker itself — there is no
     // `permission_handler` in this project (CLAUDE.md §3).
@@ -99,6 +102,7 @@ class _PhotoMealSheetState extends ConsumerState<PhotoMealSheet> {
       _preview = bytes;
       _failure = null;
       _resolved = null;
+      _prepared = null;
     });
   }
 
@@ -113,11 +117,11 @@ class _PhotoMealSheetState extends ConsumerState<PhotoMealSheet> {
 
     var spent = false;
     try {
-      final dataUri = await ref.read(imagePrepProvider).prepare(bytes);
+      final prepared = await ref.read(imagePrepProvider).prepare(bytes);
 
       spent = true;
       final meal = await ref.read(openRouterClientProvider).parsePhoto(
-            imageDataUri: dataUri,
+            imageDataUri: prepared.dataUri,
             note: _note.text,
           );
       final resolved = await ref.read(mealResolverProvider).resolve(meal);
@@ -129,6 +133,10 @@ class _PhotoMealSheetState extends ConsumerState<PhotoMealSheet> {
       setState(() {
         _resolved = resolved;
         _unrecognised = meal.unrecognised;
+        // Kept only now, once the picture has actually produced something.
+        // Writing a file for a photograph the user then discards would leave
+        // a souvenir of a meal that was never logged.
+        _prepared = prepared;
       });
     } on ImageTooLarge catch (e) {
       // Caught before the request, so nothing was spent.
@@ -152,6 +160,15 @@ class _PhotoMealSheetState extends ConsumerState<PhotoMealSheet> {
     final stamp = clock.now().toIso8601String();
     final note = _note.text.trim();
 
+    // One photograph, one file, and every entry it produced points at it. That
+    // is what the column allows and it is honest: each of these rows did come
+    // out of this picture. `rawText` one line down already works exactly this
+    // way with the note.
+    final photo = await ref.read(mealPhotoStoreProvider).save(
+          _prepared?.jpeg ?? Uint8List(0),
+          stamp: stamp,
+        );
+
     for (final item in items) {
       await db.journalDao.add(
         EntriesCompanion.insert(
@@ -162,6 +179,7 @@ class _PhotoMealSheetState extends ConsumerState<PhotoMealSheet> {
           unit: item.unit,
           grams: item.grams,
           rawText: Value(note.isEmpty ? null : note),
+          photoPath: Value(photo),
           confidence: Value(item.confidence),
           createdAt: stamp,
         ),

@@ -11,6 +11,7 @@ import '../../theme/typography.dart';
 import '../../widgets/alchemy_vial.dart';
 import '../../widgets/creature_plate.dart';
 import '../../widgets/food_card.dart';
+import '../../widgets/meal_thumb.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
 import '../../widgets/sealed_node.dart';
@@ -337,6 +338,24 @@ class _DesignGalleryScreenState extends State<DesignGalleryScreen> {
                 const SizedBox(height: Space.md),
                 Text('Salted almonds', style: Type.heading(size: 20)),
                 Text('Alesto', style: Type.lore(size: 12)),
+                const RunicDivider(),
+                // The same photograph at journal size, weathered by the same
+                // filter, so the two surfaces that show pictures can be
+                // compared side by side rather than a screen apart.
+                Row(
+                  children: [
+                    MealThumb(image: _PaintedSample()),
+                    Expanded(
+                      child: Text(
+                        'Logged from a photograph',
+                        style: Type.prose(size: 14),
+                      ),
+                    ),
+                    Text('184', style: Type.prose(size: 15, weight: 600)),
+                    const SizedBox(width: Space.xs),
+                    Text('kcal', style: Type.label(size: 8)),
+                  ],
+                ),
               ],
             ),
           ),

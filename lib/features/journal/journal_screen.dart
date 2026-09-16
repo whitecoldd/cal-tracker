@@ -8,6 +8,7 @@ import '../../domain/day.dart';
 import '../../domain/portion.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
+import '../../widgets/meal_thumb.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
 import '../activity/activity_panel.dart';
@@ -344,7 +345,7 @@ class _MealSection extends StatelessWidget {
   }
 }
 
-class _EntryRow extends StatelessWidget {
+class _EntryRow extends ConsumerWidget {
   const _EntryRow({
     required this.day,
     required this.item,
@@ -356,7 +357,12 @@ class _EntryRow extends StatelessWidget {
   final bool isLast;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final photoPath = item.entry.photoPath;
+    final photo = photoPath == null
+        ? null
+        : ref.watch(mealPhotoProvider(photoPath)).valueOrNull;
+
     final portion = describePortion(
       quantity: item.entry.quantity,
       unit: item.entry.unit,
@@ -377,6 +383,12 @@ class _EntryRow extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: Space.sm),
             child: Row(
               children: [
+                // Guarded here rather than left to the widget's own null
+                // branch, so that the thumbnail being *in the tree* means there
+                // is a picture. A widget that renders nothing still answers a
+                // finder, which is how the first version of this passed a test
+                // asserting a typed entry had no thumbnail.
+                if (photo != null) MealThumb(image: photo),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,

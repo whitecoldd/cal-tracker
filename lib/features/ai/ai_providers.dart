@@ -6,6 +6,7 @@ import '../../data/ai/image_prep.dart';
 import '../../data/ai/meal_resolver.dart';
 import '../../data/ai/openrouter_client.dart';
 import '../../data/daos/ai_calls_dao.dart';
+import '../../data/meal_photo_store.dart';
 import '../../providers/app_providers.dart';
 
 /// Where the OpenRouter key lives. Overridden in tests with an in-memory store.
@@ -16,6 +17,13 @@ final openRouterClientProvider = Provider<OpenRouterClient>(
     keys: ref.watch(aiKeyStoreProvider),
     calls: ref.watch(databaseProvider).aiCallsDao,
   ),
+);
+
+/// Where a photographed meal's picture is kept.
+///
+/// Overridden in tests, which have no `path_provider`.
+final mealPhotoStoreProvider = Provider<MealPhotoStore>(
+  (ref) => MealPhotoStore(),
 );
 
 /// The camera and gallery. Overridden in tests, which have neither.

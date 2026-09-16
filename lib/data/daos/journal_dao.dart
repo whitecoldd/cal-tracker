@@ -68,6 +68,20 @@ class JournalDao extends DatabaseAccessor<AppDatabase> with _$JournalDaoMixin {
   /// needs an event loop that a widget test's fake async does not turn.
   Future<List<LoggedItem>> forDay(Day day) => forRange(day, day);
 
+  /// Every photograph path still referenced by an entry.
+  ///
+  /// One picture is shared by every entry the photograph produced, so an entry
+  /// being deleted says nothing about whether its file is still wanted. This is
+  /// the whole answer, and `MealPhotoStore.prune` deletes what is not in it.
+  Future<Set<String>> photoPathsInUse() async {
+    final rows = await (selectOnly(entries, distinct: true)
+          ..addColumns([entries.photoPath])
+          ..where(entries.photoPath.isNotNull()))
+        .get();
+
+    return {for (final row in rows) ?row.read(entries.photoPath)};
+  }
+
   /// Everything logged across an inclusive day range — the week's aggregate.
   Future<List<LoggedItem>> forRange(Day from, Day to) async {
     final query = select(entries).join([

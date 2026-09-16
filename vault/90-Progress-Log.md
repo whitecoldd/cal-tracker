@@ -2144,3 +2144,78 @@ the only way to check a claim about a binary is to open the binary.
 **Verified:** both commands run, both APKs opened and their ABI folders listed.
 `python tools/check_apk_libs.py` passes on all four release APKs present. No app
 code changed; `flutter analyze` clean and 848 tests green, unchanged.
+
+---
+
+## T29 — The photograph, kept
+**Date:** 2026-09-16
+
+`Entries.photoPath` was declared in T9 and written by nothing. The photo path
+compressed a picture, sent it to a vision model, logged the items it came back
+with, and dropped the picture on the floor. 848 → 862 tests. This closes
+[[92-Mechanics-Plan]].
+
+**The bytes kept are the bytes sent.** `ImagePrep.prepare` had already
+compressed, re-encoded and — importantly — **stripped EXIF**, which is where a
+camera photograph carries the GPS coordinates of the user's kitchen. It then
+returned only the data URI and discarded the JPEG. It now returns both. So the
+copy on disk is the smallest version that still shows the meal, it cannot carry
+a location, and there is no second compression to disagree with the first.
+
+**Every entry from one photograph carries the same path.** A dish breaks into
+its components and they are all separate rows; each of them genuinely did come
+out of that picture. The precedent is one line away — `rawText` already writes
+the same note onto every row from the same photo.
+
+**It is written on logging, not on reading.** A picture that was read and then
+discarded leaves no file: a souvenir of a meal that was never logged is just
+litter.
+
+> [!important] The column holds a *relative* path
+> An absolute path is a fact about where the app happened to be installed, and
+> it stops being true the moment that changes — which is exactly the situation a
+> restored backup is in. `meals/<stamp>.jpg`, resolved against wherever the app
+> lives now, cannot go stale that way. The stamp's colons are replaced, because
+> they are legal in an Android path and not in a Windows one, and the tests run
+> on Windows.
+
+**A missing photograph is an ordinary answer.** The mirror holds table rows and
+`Journal.md` — no binaries — so after a restore *every* `photoPath` names a file
+that is not there. The entry is still true; only its souvenir is gone, and an
+error where a picture used to be would be a worse answer than silence. That is
+the correct trade rather than a gap: photographs in the JSON mirror would bloat
+a file whose whole point is that it can be opened in Obsidian and read.
+
+**Orphans are swept, and that needed thinking about.** One picture belongs to
+several entries, so deleting an entry cannot delete the file — no single
+deletion knows whether the others are gone too. Without a sweep the orphans stay
+for the life of the install, which is the difference between a feature and a
+leak. `JournalDao.photoPathsInUse` gives the whole answer in one distinct query
+and `MealPhotoStore.prune` deletes what is not in it, at the same moment the
+backup mirror is written: the user has finished changing things and the process
+is still alive. The store takes the set rather than querying itself, because a
+file store that knew how to read entries would be two things at once.
+
+**A widget that renders nothing still answers a finder.** `MealThumb` returns
+`SizedBox.shrink()` on a null image, and the first version built it
+unconditionally — so `find.byType(MealThumb)` found it on a typed entry and the
+test asserting the opposite failed. Guarded at the call site now, the way
+`_Plate` already does it, so **being in the tree means there is a picture**.
+Worth recording beside T25's tofu box: both are a test seeing what was *asked
+for* rather than what was *drawn*.
+
+**The treatment moved into the theme.** T26's desaturation matrix was private to
+`CreaturePlate`; the thumbnail needed the same one. It is `Filters.weathered` in
+`tokens.dart` now, for exactly the reason §5 gives for colour: a photograph is
+the one thing in this app that does not come from the palette, so it is pulled
+towards it in one place rather than two. Both primitives sit in the design
+gallery, one above the other, so they can be compared rather than remembered.
+
+**Out of scope, deliberately:** attaching a photograph on the manual and barcode
+paths. The column allows it; the picker flow for it is separate UI, and this
+task was about the picture the app already took and threw away.
+
+**Verified:** `flutter analyze` clean, 862 tests green. **No golden changed
+except the gallery**, which is the check that the claim holds: the Journal
+golden's entries were typed, so nothing on it should have moved, and nothing
+did.

@@ -4,6 +4,16 @@ tags: [plan, backlog]
 
 # Mechanics Plan — the gaps that outlived the first round
 
+> [!success] All four shipped, T24 to T29
+> Mutagens spent, the level-up marked, the Bestiary plate rendered, the
+> photograph kept. Two were found along the way and fixed in the same run:
+> `withAdrenaline` had no callers either (T24), and `setPurchasedCredit` had
+> none, so a funded OpenRouter key was told it had fifty requests a day (T27).
+> T28 corrected a build command T23 had asserted without running.
+>
+> The pattern named at the top of this note held for every single one: the
+> mechanism was built and the wire was missing.
+
 Four things the app computes, stores or carries and then does nothing with.
 Each has been recorded at least once in [[90-Progress-Log]] and scheduled zero
 times; [[91-Improvement-Plan]] listed them at its foot and closed without them.
@@ -222,6 +232,10 @@ reviewable without a device, and is probably worth its own moment in the task.
 ---
 
 ### T27 — The photograph, kept
+
+> [!success] Shipped as T29
+> T27 and T28 went to the OpenRouter allowance and the arm64 build command;
+> this landed after them. See [[90-Progress-Log]].
 
 `Entries.photoPath` is declared at
 [tables.dart:158](../lib/data/tables.dart#L158) and is referenced by **nothing

@@ -11,12 +11,15 @@ import 'package:cal_tracker/features/journal/journal_screen.dart';
 import 'package:cal_tracker/features/journal/water_providers.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
+import 'package:cal_tracker/widgets/meal_thumb.dart';
 import 'package:clock/clock.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/painted_image.dart';
 
 const _now = '2026-09-14T10:00:00.000';
 final _today = Day.of(2026, 9, 14);
@@ -286,7 +289,7 @@ void main() {
     Future<T> real<T>(WidgetTester tester, Future<T> Function() body) async =>
         (await tester.runAsync(body)) as T;
 
-    Future<void> pump(WidgetTester tester) async {
+    Future<void> pump(WidgetTester tester, {ImageProvider? photo}) async {
       tester.view.physicalSize = const Size(1080, 2400);
       tester.view.devicePixelRatio = 3;
       addTearDown(tester.view.reset);
@@ -305,6 +308,10 @@ void main() {
             // The waterskin reads a live query stream, which fake async never
             // lets finish and which leaks a timer on cancel. Same rule.
             waterLogProvider.overrideWith((ref) => Stream.value(null)),
+            // An entry logged from a photograph resolves its picture through
+            // the filesystem, which a widget test has no `path_provider` for,
+            // and `FileImage` would decode asynchronously even if it did.
+            mealPhotoProvider.overrideWith((ref, path) async => photo),
           ],
           child: MaterialApp(
             theme: AppTheme.build(),
@@ -314,6 +321,79 @@ void main() {
       );
       await tester.pumpAndSettle();
     }
+
+    testWidgets('an entry from a photograph is marked with it', (tester) async {
+      await withClock(Clock.fixed(DateTime(2026, 9, 14, 12)), () async {
+        await real(tester, () async {
+          final food = await addFood('Stew');
+          await db.journalDao.add(
+            EntriesCompanion.insert(
+              foodId: food,
+              day: _today,
+              mealSlot: MealSlot.dinner,
+              quantity: 300,
+              unit: PortionUnit.grams,
+              grams: 300,
+              photoPath: const Value('meals/2026-09-14T12-00-00.000.jpg'),
+              createdAt: _now,
+            ),
+          );
+        });
+
+        await pump(tester, photo: const PaintedTestImage());
+        expect(find.byType(MealThumb), findsOneWidget);
+      });
+    });
+
+    testWidgets('a typed entry carries no thumbnail at all', (tester) async {
+      await withClock(Clock.fixed(DateTime(2026, 9, 14, 12)), () async {
+        await real(tester, () async {
+          final food = await addFood('Stew');
+          await db.journalDao.add(
+            EntriesCompanion.insert(
+              foodId: food,
+              day: _today,
+              mealSlot: MealSlot.dinner,
+              quantity: 300,
+              unit: PortionUnit.grams,
+              grams: 300,
+              createdAt: _now,
+            ),
+          );
+        });
+
+        await pump(tester);
+        expect(find.byType(MealThumb), findsNothing);
+      });
+    });
+
+    testWidgets('a photograph that is gone leaves the entry intact',
+        (tester) async {
+      // What every entry looks like after a restore: the rows come back from
+      // the mirror and the files do not. The meal is still logged.
+      await withClock(Clock.fixed(DateTime(2026, 9, 14, 12)), () async {
+        await real(tester, () async {
+          final food = await addFood('Stew');
+          await db.journalDao.add(
+            EntriesCompanion.insert(
+              foodId: food,
+              day: _today,
+              mealSlot: MealSlot.dinner,
+              quantity: 300,
+              unit: PortionUnit.grams,
+              grams: 300,
+              photoPath: const Value('meals/long-since-deleted.jpg'),
+              createdAt: _now,
+            ),
+          );
+        });
+
+        await pump(tester);
+
+        expect(find.byType(MealThumb), findsNothing);
+        expect(find.text('Stew'), findsOneWidget);
+      });
+    });
 
     testWidgets('an empty day says so plainly', (tester) async {
       await withClock(Clock.fixed(DateTime(2026, 9, 14, 12)), () async {
