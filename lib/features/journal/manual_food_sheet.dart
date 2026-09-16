@@ -1,6 +1,7 @@
 import 'package:clock/clock.dart';
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -8,6 +9,8 @@ import '../../data/ai/image_prep.dart';
 import '../../data/ai/openrouter_client.dart';
 import '../../data/database.dart';
 import '../../data/tables.dart';
+import '../../domain/nutrition.dart';
+import '../../domain/off_submission.dart';
 import '../../domain/parsed_meal.dart';
 import '../../providers/app_providers.dart';
 import '../../theme/tokens.dart';
@@ -17,6 +20,7 @@ import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
 import '../../widgets/witcher_button.dart';
 import '../ai/ai_providers.dart';
+import 'food_lookup_providers.dart';
 import 'journal_providers.dart';
 
 /// Writes a food into the library by hand.
@@ -103,6 +107,15 @@ class _ManualFoodSheetState extends ConsumerState<ManualFoodSheet> {
   /// them, so a food typed by hand still says nothing it was not told.
   int? _novaGroup;
   int? _glycemicIndex;
+
+  /// The row just written, held so the hand-off can describe it.
+  ///
+  /// Set instead of popping when there is a barcode: a product the ledger has
+  /// never held is exactly the one worth filing, and the moment the user has
+  /// finished transcribing the packet is the only moment they have the packet
+  /// in their hand and the figures in front of them. Asking later would be
+  /// asking someone to go and find the bag again.
+  Food? _filed;
 
   @override
   void dispose() {
@@ -254,12 +267,60 @@ class _ManualFoodSheetState extends ConsumerState<ManualFoodSheet> {
 
     final stored = await db.foodsDao.findById(id);
     ref.read(foodLibraryTickProvider.notifier).changed();
+    if (!mounted) return;
 
-    if (mounted) Navigator.of(context).pop(stored);
+    // Nothing to file without a barcode: Open Food Facts is keyed by one, and
+    // a home-cooked food has no place in it at all.
+    if (stored == null || widget.barcode == null) {
+      Navigator.of(context).pop(stored);
+      return;
+    }
+
+    setState(() {
+      _saving = false;
+      _filed = stored;
+      // Cleared on the way in. This field carries the label reader's failures
+      // too, and a message about an unreadable photograph has nothing to say
+      // about filing a row that was then typed out by hand.
+      _readFailure = null;
+    });
+  }
+
+  /// Sends the user to the ledger's own add-product form.
+  Future<void> _openLedger(String barcode) async {
+    final opened = await ref
+        .read(externalLinksProvider)
+        .open(OffSubmission.addProductUrl(barcode));
+
+    if (!opened && mounted) {
+      setState(
+        () => _readFailure = 'Nothing on this device would open the page. '
+            'The transcript can still be copied.',
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // The form has done its job once the row exists. What is left is an offer,
+    // and it replaces the fields rather than sitting under them — a form still
+    // on screen after INSCRIBE reads as though it had not saved.
+    if (_filed case final food?) {
+      return Padding(
+        padding: const EdgeInsets.only(top: Space.huge),
+        child: Container(
+          color: Hue.voidBlack,
+          child: _LedgerHandoff(
+            food: food,
+            barcode: widget.barcode!,
+            notice: _readFailure,
+            onOpen: () => _openLedger(widget.barcode!),
+            onDone: () => Navigator.of(context).pop(food),
+          ),
+        ),
+      );
+    }
+
     return Padding(
       padding: EdgeInsets.only(
         top: Space.huge,
@@ -408,6 +469,131 @@ class _ManualFoodSheetState extends ConsumerState<ManualFoodSheet> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Offers a food the ledger has never held back to the ledger.
+///
+/// **The app does not submit it.** Open Food Facts authenticates writes with
+/// an account username and password sent on every call — there is no scoped
+/// token — so submitting from here would mean holding the user's whole account
+/// credential on the device. The data is worth contributing; the password is
+/// not worth keeping. So this opens the ledger's own form and hands over a
+/// transcript to paste, and the account stays where it belongs.
+class _LedgerHandoff extends StatefulWidget {
+  const _LedgerHandoff({
+    required this.food,
+    required this.barcode,
+    required this.onOpen,
+    required this.onDone,
+    this.notice,
+  });
+
+  final Food food;
+  final String barcode;
+  final String? notice;
+  final VoidCallback onOpen;
+  final VoidCallback onDone;
+
+  @override
+  State<_LedgerHandoff> createState() => _LedgerHandoffState();
+}
+
+class _LedgerHandoffState extends State<_LedgerHandoff> {
+  bool _copied = false;
+
+  String get _transcript => OffSubmission.transcript(
+        name: widget.food.name,
+        brand: widget.food.brand,
+        barcode: widget.barcode,
+        panel: FoodPanel(
+          kcal: widget.food.kcal,
+          proteinG: widget.food.proteinG,
+          carbsG: widget.food.carbsG,
+          sugarG: widget.food.sugarG,
+          fatG: widget.food.fatG,
+          satFatG: widget.food.satFatG,
+          fibreG: widget.food.fibreG,
+          sodiumMg: widget.food.sodiumMg,
+        ),
+      );
+
+  Future<void> _copy() async {
+    await Clipboard.setData(ClipboardData(text: _transcript));
+    if (mounted) setState(() => _copied = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(Space.lg),
+      children: [
+        Text(
+          'IT IS YOURS. GIVE IT TO THE LEDGER?',
+          style: Type.heading(size: 15, letterSpacing: 2),
+        ),
+        const SizedBox(height: Space.xs),
+        Text(
+          'Open Food Facts has no record of this sigil. What you just wrote '
+          'down would answer for everyone who scans it after you.',
+          style: Type.lore(size: 12),
+        ),
+        const RunicDivider(height: 20),
+        OrnatePanel(
+          title: 'What you would file',
+          accent: Hue.steel,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Shown in full rather than summarised. It is about to be pasted
+              // into a public record, and the moment to notice a wrong figure
+              // is before that rather than after.
+              SelectableText(
+                _transcript,
+                style: Type.prose(size: 12, color: Hue.parchmentDim),
+              ),
+              const SizedBox(height: Space.sm),
+              WitcherButton(
+                label: _copied ? 'COPIED' : 'COPY IT',
+                icon: _copied ? Icons.check : Icons.copy_outlined,
+                onPressed: _copy,
+              ),
+            ],
+          ),
+        ),
+        if (widget.notice case final message?) ...[
+          const SizedBox(height: Space.sm),
+          Text(message, style: Type.lore(size: 12, color: Hue.adrenaline)),
+        ],
+        const SizedBox(height: Space.lg),
+        WitcherButton(
+          label: 'OPEN THE LEDGER',
+          icon: Icons.open_in_new,
+          tone: ButtonTone.primary,
+          expand: true,
+          onPressed: widget.onOpen,
+        ),
+        const SizedBox(height: Space.xs),
+        Text(
+          'The ledger asks you to sign in and paste it yourself. This app '
+          'never holds that password.',
+          style: Type.lore(size: 11, color: Hue.parchmentFaint),
+        ),
+        const SizedBox(height: Space.md),
+        WitcherButton(
+          label: 'NOT NOW',
+          expand: true,
+          onPressed: widget.onDone,
+        ),
+        const SizedBox(height: Space.xs),
+        Text(
+          'The food is already written down either way. This changes nothing '
+          'on your Path.',
+          style: Type.lore(size: 11, color: Hue.parchmentFaint),
+        ),
+        const SizedBox(height: Space.xl),
+      ],
     );
   }
 }

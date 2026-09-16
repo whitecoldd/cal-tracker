@@ -3,10 +3,17 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/database.dart';
+import '../../data/links/external_links.dart';
 import '../../data/remote/food_remote.dart';
 import '../../data/remote/remote_food.dart';
 import '../../providers/app_providers.dart';
 import 'barcode_scanner_screen.dart';
+
+/// Opens a web page, for the Open Food Facts hand-off.
+///
+/// Overridden in tests, which have no platform channel and no browser.
+final externalLinksProvider =
+    Provider<ExternalLinks>((ref) => const PlatformExternalLinks());
 
 /// The upstream food source.
 ///

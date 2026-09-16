@@ -5,8 +5,10 @@ import 'package:cal_tracker/data/ai/ai_key_store.dart';
 import 'package:cal_tracker/data/ai/image_prep.dart';
 import 'package:cal_tracker/data/ai/openrouter_client.dart';
 import 'package:cal_tracker/data/database.dart';
+import 'package:cal_tracker/data/links/external_links.dart';
 import 'package:cal_tracker/data/tables.dart';
 import 'package:cal_tracker/features/ai/ai_providers.dart';
+import 'package:cal_tracker/features/journal/food_lookup_providers.dart';
 import 'package:cal_tracker/features/journal/manual_food_sheet.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
@@ -64,12 +66,13 @@ void main() {
   tearDown(() async => db.close());
 
   /// Opens the manual sheet with a fake camera and a fake upstream behind it.
-  Future<FakeOpenRouterAdapter> pump(
+  Future<({FakeOpenRouterAdapter adapter, RecordingExternalLinks links})> pump(
     WidgetTester tester, {
     List<FakeReply> replies = const [],
     bool hasKey = true,
     Uint8List? photo,
     String? barcode = '4840811001867',
+    bool linksOpen = true,
   }) async {
     // Tall on purpose. The sheet is a ListView, so a field scrolled out of the
     // viewport is unmounted and simply cannot be found — and the reader panel
@@ -81,6 +84,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     final adapter = FakeOpenRouterAdapter(replies);
+    final links = RecordingExternalLinks(succeeds: linksOpen);
 
     await tester.pumpWidget(
       ProviderScope(
@@ -104,6 +108,8 @@ void main() {
           // because the fake upstream never looks at them.
           imagePrepProvider
               .overrideWithValue(ImagePrep(compressor: _FakeCompressor())),
+          // No browser, and no platform channel to reach one.
+          externalLinksProvider.overrideWithValue(links),
         ],
         child: MaterialApp(
           theme: AppTheme.build(),
@@ -122,7 +128,19 @@ void main() {
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    return adapter;
+    return (adapter: adapter, links: links);
+  }
+
+  /// Fills the form by hand and presses INSCRIBE.
+  Future<void> inscribe(WidgetTester tester, {String name = 'Oat flakes'}) async {
+    final fields = find.byType(TextFormField);
+    await tester.enterText(fields.at(0), name);
+    await tester.enterText(fields.at(2), '370');
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('INSCRIBE'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
   }
 
   group('reading the packet', () {
@@ -207,12 +225,12 @@ void main() {
     });
 
     testWidgets('backing out of the camera spends nothing', (tester) async {
-      final adapter = await pump(tester, photo: null);
+    final built = await pump(tester, photo: null);
 
       await tester.tap(find.text('PHOTOGRAPH'));
       await tester.pumpAndSettle();
 
-      expect(adapter.callCount, 0);
+      expect(built.adapter.callCount, 0);
       final calls = await tester.runAsync(
         () => db.aiCallsDao.select(db.aiCalls).get(),
       );
@@ -274,6 +292,97 @@ void main() {
       // Still written by hand: the user pressed INSCRIBE on figures they were
       // shown, so this outranks anything upstream says later.
       expect(stored.source, FoodSource.manual);
+    });
+  });
+
+  group('giving it back to the ledger', () {
+    testWidgets('offers the hand-off once the row is written', (tester) async {
+      // The moment the user has finished transcribing a packet is the only
+      // moment they have the packet in their hand. Asking later would be
+      // asking them to go and find the bag again.
+      await pump(tester, hasKey: false);
+      await inscribe(tester);
+
+      expect(find.textContaining('GIVE IT TO THE LEDGER'), findsOne);
+      // And the row exists already — the offer is not a condition of saving.
+      final stored = await tester.runAsync(
+        () => db.foodsDao.findByBarcode('4840811001867'),
+      );
+      expect(stored!.name, 'Oat flakes');
+    });
+
+    testWidgets('shows the transcript before it can be pasted anywhere',
+        (tester) async {
+      // It is about to go into a public record. The moment to notice a wrong
+      // figure is before that rather than after.
+      await pump(tester, hasKey: false);
+      await inscribe(tester);
+
+      expect(find.textContaining('Energy: 370 kcal'), findsOne);
+      expect(find.textContaining('Barcode: 4840811001867'), findsOne);
+    });
+
+    testWidgets('opens the ledger at that barcode', (tester) async {
+      final built = await pump(tester, hasKey: false);
+      await inscribe(tester);
+
+      await tester.tap(find.text('OPEN THE LEDGER'));
+      await tester.pumpAndSettle();
+
+      final opened = built.links.opened.single;
+      expect(opened.host, 'world.openfoodfacts.org');
+      expect(opened.queryParameters['code'], '4840811001867');
+      expect(opened.queryParameters['type'], 'add');
+    });
+
+    testWidgets('a device with no browser says so instead of doing nothing',
+        (tester) async {
+      await pump(tester, hasKey: false, linksOpen: false);
+      await inscribe(tester);
+
+      await tester.tap(find.text('OPEN THE LEDGER'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('would open the page'), findsOne);
+      // The transcript is still there, which is the whole point of saying it
+      // calmly rather than unwinding the sheet.
+      expect(find.textContaining('Energy: 370 kcal'), findsOne);
+    });
+
+    testWidgets('declining still hands the food back for logging',
+        (tester) async {
+      await pump(tester, hasKey: false);
+      await inscribe(tester);
+
+      await tester.tap(find.text('NOT NOW'));
+      await tester.pumpAndSettle();
+
+      // The sheet closed, and nothing about the food changed.
+      expect(find.textContaining('GIVE IT TO THE LEDGER'), findsNothing);
+      final stored = await tester.runAsync(
+        () => db.foodsDao.findByBarcode('4840811001867'),
+      );
+      expect(stored!.source, FoodSource.manual);
+    });
+
+    testWidgets('a food with no barcode is never offered', (tester) async {
+      // Open Food Facts is keyed by a barcode, and a home-cooked food has no
+      // place in it at all.
+      await pump(tester, hasKey: false, barcode: null);
+      await inscribe(tester, name: 'Borscht');
+
+      expect(find.textContaining('GIVE IT TO THE LEDGER'), findsNothing);
+    });
+
+    testWidgets('never asks for an Open Food Facts password', (tester) async {
+      // The whole reason this is a hand-off rather than a submission: the
+      // ledger authenticates writes with an account password sent on every
+      // call, and that is not a thing to keep on a phone.
+      await pump(tester, hasKey: false);
+      await inscribe(tester);
+
+      expect(find.textContaining('never holds that password'), findsOne);
+      expect(find.byType(TextFormField), findsNothing);
     });
   });
 }

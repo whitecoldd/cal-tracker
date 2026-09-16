@@ -81,6 +81,12 @@ is wrong, however convenient.
   commit, not two — never commit code and leave the log entry for later.
 - Commit messages: `T<n>: <imperative summary>`, then a short body explaining
   *why*. End with the Co-Authored-By trailer.
+- **No Open Food Facts credential is ever stored.** Its write endpoint
+  authenticates with an account username *and password* sent on every call —
+  there is no scoped token to revoke. So the app does not submit on the user's
+  behalf: it opens the ledger's own add-product form and hands over a
+  transcript to paste (T32). If a scoped token ever exists, revisit; until
+  then, do not add a "log in to Open Food Facts" screen.
 - Never commit secrets. The OpenRouter key lives in `flutter_secure_storage`
   and is entered in-app. No key belongs in any Dart source, test or fixture.
   `.env` is gitignored and untracked — only `.env.example`, which holds a
@@ -148,6 +154,11 @@ deprecation-as-error. We do not need it:
 - `MANAGE_EXTERNAL_STORAGE` (the backup mirror) → a ~20-line platform channel
   in `MainActivity.kt` firing `Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION`,
   added in T13
+
+`url_launcher` is absent for the same reason, and opening a web page is a
+second hand-rolled channel in `MainActivity.kt` (`/links`, T32). It fires
+`ACTION_VIEW` and **refuses any scheme but http(s)**, on both sides of the
+channel — a launcher that takes `file://` or `content://` reads as the app.
 
 Do not re-add `permission_handler` to solve a permission problem without first
 checking it actually builds.

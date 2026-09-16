@@ -2343,3 +2343,65 @@ credentials in secure storage. It is the next task.
 
 **Verified:** `flutter analyze` clean, 891 tests green. No plugin was added, so
 no APK check was required under §3 — `image_picker` was already a dependency.
+
+---
+
+## T32 — Giving it back to the ledger
+**Date:** 2026-09-16
+
+T30 made a failed scan legible, T31 made it recoverable. This closes the loop:
+what the user writes down for a barcode Open Food Facts has never held is
+offered back to Open Food Facts. 891 → 905 tests.
+
+**The app does not submit, and that is the design rather than a shortcut.** The
+ledger's write endpoint — `saveProduct(User, Product)` — authenticates with an
+account **username and password**, sent on every call. There is no scoped token
+to revoke. Submitting from inside the app would mean holding the user's whole
+Open Food Facts credential on the device, next to the OpenRouter key but
+materially worse: a key can be revoked alone, an account password cannot. The
+data is worth contributing; the password is not worth keeping. So the app opens
+the ledger's own add-product form and hands over a transcript to paste, and the
+account stays where it belongs. This is now a rule in CLAUDE.md §2 rather than
+a decision that could be quietly reversed later.
+
+**It is offered at the only moment it can be.** The hand-off replaces the form
+once INSCRIBE has written the row, rather than waiting for some later screen.
+The person has the packet in their hand and the figures in front of them
+exactly once; asking tomorrow is asking them to go and find the bag again. The
+row exists before the offer, so declining costs nothing and NOT NOW still hands
+the food back for logging.
+
+**The transcript is shown in full, not summarised.** It is about to be pasted
+into a public record and the moment to notice a wrong figure is before that.
+`OffSubmission` is pure Dart in `domain/` so both the URL and the text are
+tested without a device.
+
+**Salt, and the one place a rounding rule mattered.** The form asks for salt,
+every pack here states salt, the app stores sodium. Converting in code rather
+than in someone's head is the difference between a contribution and a wrong
+one — and salt alone prints at **two** decimals, because 0.05 g is an ordinary
+pack figure and at one decimal it becomes 0.1, which is double. The first
+version of this printed 0.95 g as `0.9`; that is the kind of error that is
+invisible in an app and permanent in a database.
+
+**A second hand-rolled channel, for the reason §3 already gives.**
+`url_launcher` is a plugin, and §3 is a record of what a plugin that resolves
+in pub but does not build on Android costs. Opening a web page is one intent,
+so it is one intent in `MainActivity.kt` beside the storage one. It **refuses
+any scheme but http(s) on both sides** — the handler is reachable by anything
+that can talk to the engine, and an `ACTION_VIEW` that takes any scheme is a
+wider door than it looks, since `file://` and `content://` intents read as the
+app. It returns false rather than throwing when nothing takes the intent: a
+phone with no browser is a thing to mention beside the transcript the user can
+still copy, not a reason to unwind the sheet.
+
+**One thing to watch:** `_readFailure` now carries both the label reader's
+failures and the link opener's. It is cleared on entering the hand-off, because
+a message about an unreadable photograph has nothing to say about filing a row
+that was then typed by hand. Two fields would be cleaner if a third use appears.
+
+**Verified:** `flutter analyze` clean, 905 tests green. Native Kotlin changed,
+so `flutter build apk --debug` was run and `python tools/check_apk_libs.py
+build/app/outputs/flutter-apk/app-debug.apk` passed — worth noting that the
+checker's default list is release APKs only, so a debug build must be passed by
+path or it silently checks stale artefacts instead.

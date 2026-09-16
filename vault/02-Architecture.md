@@ -303,6 +303,41 @@ Camera permission is requested by the plugin itself — there is no
 `permission_handler` here (see below) — so a denial arrives as a
 `MobileScannerException`, handled in the scanner's `errorBuilder`.
 
+### When a barcode finds nothing (T30–T32)
+
+Open Food Facts is thin outside western Europe — roughly 1,800 products tagged
+Moldova against France's million-plus — so a miss is the ordinary case here
+rather than the edge one. Three things follow from that, and together they turn
+a dead end into a loop that closes:
+
+1. **The digits are shown and copyable** (T30). The ledger answers to the
+   number, so without it the user cannot check whether the code is genuinely
+   absent. A miss used to discard the one piece of evidence they could act on.
+2. **The packet can be read** (T31). A photograph of the nutrition table fills
+   the manual form. See [[05-AI-Layer]] for why that was worth a fifth AI use.
+3. **The result can be given back** (T32). What the user just wrote down would
+   answer for everyone who scans that barcode after them.
+
+Two barcodes are worth keeping as the worked examples, because they fail
+*differently*: `4840811001867` (Banzai salted almonds) is `product_not_found`,
+while `5060947547162` (Monster Energy Ultra) is **found** and holds
+`countries_tags: ["en:moldova"]` and no other field — no name, no nutriments.
+The first is `BarcodeUnknown`; the second is `ProductUnusable(noName)`.
+
+> [!important] The app never holds an Open Food Facts credential
+> The ledger's write endpoint authenticates with an account **username and
+> password**, sent on every call. There is no scoped token to revoke, so
+> submitting from inside the app would mean keeping the user's whole account
+> credential on the device. The data is worth contributing; the password is not
+> worth holding.
+>
+> So T32 is a *hand-off*: `OffSubmission` builds the add-product URL and a
+> plain-text transcript of the panel, the app opens the ledger's own form, and
+> the user pastes it while signed in as themselves. The transcript prints salt
+> as well as sodium, because the form asks for salt and the app stores sodium —
+> doing that conversion in code rather than in someone's head is the difference
+> between a contribution and a wrong one.
+
 ## Movement (T10)
 
 ```
@@ -516,3 +551,13 @@ the build script uses the `kotlin { compilerOptions { } }` DSL and hits
 | Camera | `image_picker` / `mobile_scanner` |
 | `ACTIVITY_RECOGNITION`, Health Connect | `health` |
 | `MANAGE_EXTERNAL_STORAGE` | platform channel in `MainActivity.kt` (T13) |
+
+`url_launcher` is absent for the same reason, and opening a web page is a
+second hand-rolled channel — `com.whitecoldd.cal_tracker/links`, added in T32
+for the Open Food Facts hand-off. It fires `ACTION_VIEW` with
+`FLAG_ACTIVITY_NEW_TASK` (it is started from a method-channel callback, not
+from an activity's own click handler) and **refuses any scheme but http(s)**,
+checked on both the Dart and the Kotlin side. The handler is reachable by
+anything that can talk to the engine, and an `ACTION_VIEW` that takes any
+scheme is a wider door than it looks: `file://` and `content://` intents read
+as the app.
