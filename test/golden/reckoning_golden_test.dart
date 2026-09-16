@@ -4,6 +4,7 @@ library;
 import 'package:cal_tracker/data/week_archive.dart';
 import 'package:cal_tracker/domain/day.dart';
 import 'package:cal_tracker/domain/energy.dart';
+import 'package:cal_tracker/domain/progression.dart';
 import 'package:cal_tracker/domain/reckoning.dart';
 import 'package:cal_tracker/domain/reveal_gate.dart';
 import 'package:cal_tracker/domain/week_summary.dart';
@@ -83,6 +84,14 @@ void main() {
                       dailyWeights: [82, 81.8, 81.5, 81.4, 81.1],
                     ),
                   )
+                : null,
+          ),
+          // The revealed golden carries a level-up so the mark is actually
+          // reviewable without a device — CLAUDE.md §5. Without this override
+          // the provider would reach a real database the golden has not got.
+          levelUpProvider.overrideWith(
+            (ref) async => reckoning.isRevealed
+                ? levelUpFrom(xpBefore: 420, xpGained: 145)
                 : null,
           ),
         ],

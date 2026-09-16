@@ -140,6 +140,31 @@ final weekReckoningProvider = FutureProvider<Reckoning>((ref) async {
   );
 });
 
+/// The level this week's seal crossed, if it crossed one.
+///
+/// Built from the weeks *before* the one on screen rather than from the running
+/// total, because the Reckoning can page backwards: the question is what that
+/// seal did at the time, not what the user's level is today. Reading
+/// `totalXpProvider` would make an old week claim a level-up it did not cause,
+/// or miss the one it did.
+///
+/// Needs no stored flag, and that is worth stating because a "has the level-up
+/// been seen" column is the obvious thing to reach for. XP moves only when a
+/// week seals, so both sides of the boundary are arithmetic on rows that are
+/// already frozen.
+final levelUpProvider = FutureProvider<LevelUp?>((ref) async {
+  final archived = await ref.watch(archivedWeekProvider.future);
+  if (archived == null) return null;
+
+  final weeks = await ref.watch(databaseProvider).weeksDao.history();
+
+  final before = weeks
+      .where((w) => w.weekStart.isBefore(archived.weekStart))
+      .fold<int>(0, (sum, week) => sum + week.xpAwarded);
+
+  return levelUpFrom(xpBefore: before, xpGained: archived.summary.xp);
+});
+
 /// Freezes a week and reads it back.
 final weekArchiveProvider = Provider<WeekArchive>(
   (ref) => WeekArchive(

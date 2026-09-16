@@ -126,6 +126,11 @@ Planned and dropped in T11 ("levels are a character-sheet concept, and the
 curve belongs in T12a"), dropped again in T12a, and ruled out of scope in T21,
 whose animation budget went to day transitions. Third time scheduled.
 
+> [!success] Shipped
+> See [[90-Progress-Log]] T25. The arrow between the two levels was a tofu box
+> that every widget assertion passed straight through; only the golden showed
+> it.
+
 > [!tip] It needs no new state, and that is not obvious
 > `totalXp` is the sum of `week.xpAwarded`
 > ([path_providers.dart:24](../lib/features/path/path_providers.dart#L24)), and

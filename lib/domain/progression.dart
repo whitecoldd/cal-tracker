@@ -111,6 +111,48 @@ Progression levelFor(int totalXp) {
   );
 }
 
+/// A level boundary crossed by a single award.
+///
+/// Carries both sides rather than just the new level, because the interesting
+/// thing about a level-up is the *crossing* — a screen that only knew the new
+/// figure could not say what it replaced, and a week that took two levels at
+/// once should be able to say so.
+class LevelUp {
+  const LevelUp({required this.from, required this.to});
+
+  /// Where the user stood before the award.
+  final Progression from;
+
+  /// Where the award left them.
+  final Progression to;
+
+  /// How many boundaries were crossed. Always at least one.
+  int get levels => to.level - from.level;
+
+  /// Whether the crossing also earned a new title.
+  ///
+  /// Ranks are bands rather than a name per level, so this is rare and worth
+  /// saying differently when it happens. See [Rank].
+  bool get rankChanged => to.rank != from.rank;
+}
+
+/// The level-up a week's award caused, or null if it crossed no boundary.
+///
+/// Takes the total *before* the award and the award itself rather than reading
+/// a running level, so it answers correctly for a week in the past: the
+/// question is what that seal did at the time, not what the user's level is
+/// today. A screen that can page backwards needs the first answer.
+LevelUp? levelUpFrom({required int xpBefore, required int xpGained}) {
+  if (xpGained <= 0) return null;
+
+  final before = levelFor(xpBefore);
+  final after = levelFor(xpBefore + xpGained);
+
+  if (after.level <= before.level) return null;
+
+  return LevelUp(from: before, to: after);
+}
+
 /// Consecutive days logged, ending at [today].
 ///
 /// Counts backwards from today, and allows today itself to be empty — the day

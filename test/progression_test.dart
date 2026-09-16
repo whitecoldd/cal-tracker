@@ -194,6 +194,57 @@ void main() {
     });
   });
 
+  group('a level crossed at a seal', () {
+    test('an award that stays inside a level crosses nothing', () {
+      // The ordinary week. Most weeks are this, which is why the screen shows
+      // nothing rather than announcing that nothing happened.
+      expect(levelUpFrom(xpBefore: 0, xpGained: 100), isNull);
+    });
+
+    test('an award that clears the boundary reports both sides', () {
+      final crossing = levelUpFrom(xpBefore: 420, xpGained: 145)!;
+
+      expect(crossing.from.level, 3);
+      expect(crossing.to.level, 4);
+      expect(crossing.levels, 1);
+    });
+
+    test('a level that also earns a title says so', () {
+      // Ranks are bands, not a name per level, so this is rare.
+      final crossing = levelUpFrom(xpBefore: 420, xpGained: 145)!;
+
+      expect(crossing.rankChanged, isTrue);
+      expect(crossing.to.rank, Rank.wanderer);
+
+      final within = levelUpFrom(xpBefore: 600, xpGained: 200)!;
+      expect(within.rankChanged, isFalse);
+    });
+
+    test('a big award can take more than one level at once', () {
+      final crossing = levelUpFrom(xpBefore: 0, xpGained: 400)!;
+
+      expect(crossing.from.level, 1);
+      expect(crossing.levels, greaterThan(1));
+    });
+
+    test('a week that earned nothing crosses nothing', () {
+      expect(levelUpFrom(xpBefore: 900, xpGained: 0), isNull);
+    });
+
+    test('it answers for the week it is given, not for today', () {
+      // The Reckoning pages backwards. Asking with the totals as they stood
+      // *then* has to give the level-up that week caused, whatever has been
+      // earned since — which is why this takes the figure before rather than
+      // reading a running level.
+      final atTheTime = levelUpFrom(xpBefore: 420, xpGained: 145)!;
+      final muchLater = levelUpFrom(xpBefore: 420, xpGained: 145)!;
+
+      expect(atTheTime.to.level, muchLater.to.level);
+      // And a later week with the same award crosses a different boundary.
+      expect(levelUpFrom(xpBefore: 5000, xpGained: 145)?.to.level, isNot(4));
+    });
+  });
+
   group('progression never reads the scale', () {
     test('the same logging earns the same level whatever the weight did', () {
       // A level that moved with the scale would be the verdict wearing a hat —

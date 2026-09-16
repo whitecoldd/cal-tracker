@@ -1,7 +1,10 @@
+import 'package:cal_tracker/data/week_archive.dart';
 import 'package:cal_tracker/domain/day.dart';
 import 'package:cal_tracker/domain/energy.dart';
+import 'package:cal_tracker/domain/progression.dart';
 import 'package:cal_tracker/domain/reckoning.dart';
 import 'package:cal_tracker/domain/reveal_gate.dart';
+import 'package:cal_tracker/domain/week_summary.dart';
 import 'package:cal_tracker/features/reckoning/reckoning_providers.dart';
 import 'package:cal_tracker/features/reckoning/reckoning_screen.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
@@ -57,7 +60,12 @@ Reckoning _reckoningOn(
 }
 
 void main() {
-  Future<void> pump(WidgetTester tester, Reckoning reckoning) async {
+  Future<void> pump(
+    WidgetTester tester,
+    Reckoning reckoning, {
+    ArchivedWeek? archived,
+    LevelUp? levelUp,
+  }) async {
     tester.view.physicalSize = const Size(1080, 4800);
     tester.view.devicePixelRatio = 3;
     addTearDown(tester.view.reset);
@@ -72,8 +80,10 @@ void main() {
           ),
           weekReckoningProvider.overrideWith((ref) async => reckoning),
           // Not overridden, this reaches a real database through
-          // path_provider, which a widget test has no plugin for.
-          archivedWeekProvider.overrideWith((ref) async => null),
+          // path_provider, which a widget test has no plugin for. The same
+          // goes for the level-up, which reads the sealed weeks behind it.
+          archivedWeekProvider.overrideWith((ref) async => archived),
+          levelUpProvider.overrideWith((ref) async => levelUp),
         ],
         child: MaterialApp(
           theme: AppTheme.build(),
@@ -88,6 +98,91 @@ void main() {
       .widgetList<Text>(find.byType(Text))
       .map((t) => (t.data ?? '').toLowerCase())
       .join(' | ');
+
+  const archived0 = ArchivedWeek(
+    weekStart: _monday,
+    summary: WeekSummary(
+      loggedDays: 7,
+      energyBalanceKcal: -3850,
+      averageDailyBalanceKcal: -550,
+      projectedChangeKg: -0.5,
+      averageVitality: 68,
+      averageToxicity: 31,
+      steps: 58000,
+      goalDays: 4,
+      xp: 145,
+      weightDeltaKg: -0.9,
+      trend: WeightTrend.falling,
+      dailyBalances: [-610, -480, -720, -540, -390, -650, -460],
+      dailyWeights: [82, 81.8, 81.5, 81.4, 81.1],
+    ),
+  );
+
+  group('the level-up', () {
+    testWidgets('an ordinary week says nothing about levels', (tester) async {
+      // Most weeks cross no boundary, and a panel that announced "no level
+      // this time" would make the ordinary case read as a failure.
+      await pump(tester, _reckoningOn(_monday.addDays(6)), archived: archived0);
+
+      expect(visibleText(tester), contains('145'));
+      expect(visibleText(tester), isNot(contains('level')));
+    });
+
+    testWidgets('a crossing names both sides and the new rank',
+        (tester) async {
+      await pump(
+        tester,
+        _reckoningOn(_monday.addDays(6)),
+        archived: archived0,
+        levelUp: levelUpFrom(xpBefore: 420, xpGained: 145),
+      );
+
+      final text = visibleText(tester);
+      expect(text, contains('level gained'));
+      // Both sides, because the crossing is the interesting part.
+      expect(text, contains('3'));
+      expect(text, contains('4'));
+      // Level 4 is where Wanderer begins.
+      expect(text, contains('wanderer'));
+
+      // No arrow, and no other glyph the two bundled text faces do not carry.
+      // A missing glyph renders as a tofu box, which every assertion above
+      // passes straight through — the first draft of this panel shipped a
+      // '→' and only the golden showed it. Arrows and geometric shapes are
+      // the blocks a text font reliably lacks.
+      expect(
+        text,
+        isNot(matches(RegExp(r'[←-⇿■-◿]'))),
+      );
+    });
+
+    testWidgets('two levels at once say so', (tester) async {
+      await pump(
+        tester,
+        _reckoningOn(_monday.addDays(6)),
+        archived: archived0,
+        levelUp: levelUpFrom(xpBefore: 140, xpGained: 340),
+      );
+
+      expect(visibleText(tester), contains('2 levels gained'));
+    });
+
+    testWidgets('the mark settles — nothing is left animating',
+        (tester) async {
+      // `pump` ends in `pumpAndSettle`, which would time out if anything here
+      // ran forever. That is not hypothetical: a zero-opacity spinner left
+      // spinning broke every search-sheet test in T21. Asserting it explicitly
+      // so the reason survives.
+      await pump(
+        tester,
+        _reckoningOn(_monday.addDays(6)),
+        archived: archived0,
+        levelUp: levelUpFrom(xpBefore: 420, xpGained: 145),
+      );
+
+      expect(tester.hasRunningAnimations, isFalse);
+    });
+  });
 
   group('the seal holds at the glass', () {
     // The domain is covered by reckoning_test.dart. This asserts the same rule

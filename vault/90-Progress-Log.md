@@ -1887,3 +1887,74 @@ bonus cannot carry the verdict onto a daily screen because it cannot see it.
 regenerated and inspected — Green Blood gold and in force, White Honey dimmed,
 the footnote naming only the active effect. It was the one golden that changed,
 which is the check that nothing else moved.
+
+---
+
+## T25 — The level-up
+**Date:** 2026-09-16
+
+Planned in T11, dropped. Planned again in T12a, dropped. Ruled out of scope in
+T21, whose animation budget went to day transitions. Fourth time scheduled and
+the first time built. 816 → 826 tests.
+
+**It needed no new state, which is why it kept looking harder than it was.**
+The obvious design is a "has this level-up been seen" column, and that is a
+schema version for a cosmetic. It is unnecessary: XP moves *only* when a week
+seals, so both sides of the boundary are arithmetic over rows that are already
+frozen. `levelUpFrom(xpBefore:, xpGained:)` is the whole mechanism.
+
+**It belongs on the reveal, not the character sheet.** A level can only change
+when a week seals, so animating it on The Path would mean animating a number
+that did not move on the screen where it did not move.
+
+**It reads the weeks *before* the one on screen, not the running total.** The
+Reckoning pages backwards, and `totalXpProvider` answers for today. Building the
+before-figure from `history()` filtered to earlier weeks means an old week
+reports the level-up *it* caused rather than one it did not, or none when it did.
+Same instinct as T24's read-by-week, and as `earnedBy` taking a frozen summary:
+a screen that can look at the past has to compute the past.
+
+**It renders nothing on an ordinary week.** Most weeks cross no boundary, and a
+panel saying "no level this time" would make the ordinary case read as a
+failure.
+
+> [!bug] The arrow was a tofu box, and only the golden could see it
+> The first draft rendered `3 → 4`. Both bundled fonts are *text* faces —
+> Cinzel and EB Garamond carry no glyph in the arrows block, so it painted an
+> empty rectangle. Every assertion passed: `contains('3')`, `contains('4')`,
+> the blackout scan, all of them. `visibleText` reads `Text.data`, which is
+> the string that *was asked for*, not the glyphs that came out.
+>
+> It is now the app's own diamond, painted rather than typed, with the old
+> level small and dim and the new one large and gold. The size difference
+> carries the direction better than an arrow did. There is a regression test
+> rejecting any character in the arrows or geometric-shapes blocks, because
+> the next person to reach for one will have the same idea.
+>
+> The general lesson: a widget test can only see text as data. **Anything about
+> how text is *drawn* is a golden's job**, which is the argument for the golden
+> carrying a level-up at all rather than the state nobody looks at.
+
+**Motion.** A one-shot `TweenAnimationBuilder`, fade plus a 12px rise, over a
+new `Motion.reveal` of 520ms — longer than a page turn because it happens at
+most once a week on a screen the user came to deliberately, and still under a
+heartbeat. Deliberately not a controller: this runs once, ends, and leaves
+nothing animating. T21 spent a whole debugging round on a zero-opacity spinner
+that never stopped and hung `pumpAndSettle` on every test that mounted the
+screen; there is now an explicit `hasRunningAnimations` assertion so that
+failure mode is named rather than merely avoided.
+
+**It replays if the week is reopened**, and that is a choice. The reveal is a
+once-a-week destination; suppressing a replay costs the stored flag this task
+was built to avoid.
+
+**The fifth time a screen gaining a provider broke that screen's tests**, as in
+T10, T11, T12b and T17 — though only *nearly* this time. `levelUpProvider`
+returns before touching the database when there is no archived week, which is
+what every existing `reckoning_screen_test` case passes, so they went on
+passing. The golden was the one that would have reached a database it has not
+got. Both now override it, and the revealed golden carries a real crossing so
+the mark is reviewable without a device, per §5.
+
+**Verified:** `flutter analyze` clean, 826 tests green, `reckoning_revealed.png`
+regenerated and inspected — twice, which is how the tofu was caught.

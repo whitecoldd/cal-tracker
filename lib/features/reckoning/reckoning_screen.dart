@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -148,6 +150,7 @@ class _Spoils extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const _LevelUpMark(),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.baseline,
@@ -173,6 +176,93 @@ class _Spoils extends StatelessWidget {
             textAlign: TextAlign.center,
             style: Type.lore(size: 12),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The level a week's seal crossed.
+///
+/// Renders nothing at all when no boundary was crossed, which is most weeks —
+/// a panel that said "no level this time" would make the ordinary case feel
+/// like a failure.
+///
+/// The one place in the app that dwells. It is earned: XP moves only when a
+/// week seals, so this can happen at most once a week, on a screen the user
+/// opened deliberately. It plays again if the week is opened again, and that is
+/// a choice rather than an oversight — suppressing a replay costs a stored flag,
+/// which is a schema version for a cosmetic.
+class _LevelUpMark extends ConsumerWidget {
+  const _LevelUpMark();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final levelUp = ref.watch(levelUpProvider).valueOrNull;
+    if (levelUp == null) return const SizedBox.shrink();
+
+    // A plain one-shot tween rather than a controller: it runs once, ends, and
+    // leaves nothing animating in the tree. Anything still moving after this
+    // would stop `pumpAndSettle` settling and time out every widget test on
+    // this screen — which is exactly what a zero-opacity spinner did in T21.
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Motion.reveal,
+      curve: Motion.easeOut,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(
+          // Rises into place. The same small travel as a page turn, so the
+          // whole app moves the same distance.
+          offset: Offset(0, (1 - t) * 12),
+          child: child,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            levelUp.levels == 1 ? 'LEVEL GAINED' : '${levelUp.levels} LEVELS GAINED',
+            textAlign: TextAlign.center,
+            style: Type.label(color: Hue.goldDim),
+          ),
+          const SizedBox(height: Space.xs),
+          // The old level small and dim, the new one large and gold, with the
+          // app's own diamond between them. No arrow: the two bundled fonts
+          // are text faces with no glyph in the arrows block, and a missing
+          // glyph renders as a tofu box that only a golden would ever show.
+          // The size difference carries the direction better than an arrow
+          // would anyway.
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                '${levelUp.from.level}',
+                style: Type.numeral(size: 22, color: Hue.parchmentDim),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: Space.md),
+                child: Transform.rotate(
+                  angle: math.pi / 4,
+                  child: Container(width: 7, height: 7, color: Hue.gold),
+                ),
+              ),
+              Text(
+                '${levelUp.to.level}',
+                style: Type.numeral(size: 36, color: Hue.gold),
+              ),
+            ],
+          ),
+          if (levelUp.rankChanged) ...[
+            const SizedBox(height: Space.xs),
+            Text(
+              levelUp.to.rank.title.toUpperCase(),
+              textAlign: TextAlign.center,
+              style: Type.heading(size: 16, color: Hue.gold),
+            ),
+          ],
+          const RunicDivider(),
         ],
       ),
     );

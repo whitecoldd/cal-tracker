@@ -110,6 +110,13 @@ abstract final class Motion {
   /// A scrim, a readout resizing — anything the eye should not have to wait on.
   static const Duration quick = Duration(milliseconds: 140);
 
+  /// A level crossed at a reveal — the one moment the app is allowed to dwell.
+  ///
+  /// Longer than [page] on purpose and still under a heartbeat: it happens at
+  /// most once a week, on a screen the user came to deliberately. Anything that
+  /// has to be waited through twice is too long, and nothing here loops.
+  static const Duration reveal = Duration(milliseconds: 520);
+
   static const Curve easeOut = Curves.easeOutCubic;
 
   /// How far a page slides, as a fraction of its width. Deliberately small.
