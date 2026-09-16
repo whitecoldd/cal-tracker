@@ -1958,3 +1958,76 @@ the mark is reviewable without a device, per §5.
 
 **Verified:** `flutter analyze` clean, 826 tests green, `reckoning_revealed.png`
 regenerated and inspected — twice, which is how the tofu was caught.
+
+---
+
+## T26 — The Bestiary plate
+**Date:** 2026-09-16
+
+`imagePath` has been carried from Open Food Facts into `Creature` since T12b and
+rendered by nothing. 826 → 839 tests.
+
+**It is a URL, and that is the whole difficulty.** `Foods.imagePath` holds a
+remote address, so "render the image" means network I/O on a screen
+`../CLAUDE.md` §4 requires to work with no key and no network. The answer is the
+one the food library already uses for everything else: resolve once, write it
+down, never fetch again. `CreatureImageStore` downloads to
+`<documents>/creatures/<foodId>`, and **the file existing is the cache hit** —
+no index, no schema change, and a cache that can be deleted at any time without
+losing anything that is not re-fetchable.
+
+**No new dependency.** `cached_network_image` would have pulled in
+`flutter_cache_manager` and with it `sqflite` — a second SQLite in an app with
+strong opinions about the first one (§3) — to do less than a hundred lines does.
+`dio` was already here for OpenRouter and `path_provider` for the database.
+
+**Every failure is silent.** Offline, a 404, an empty body, a redirect to an
+HTML error page, no writable documents directory: all of them return null and
+the sheet renders without a plate. The picture is decoration; the entry is the
+content, and nothing on this path is the user's to act on. The terminal
+`catch (e)` is the same reasoning as T16's widened guard — upstream is
+crowd-sourced and its failure modes are not ours to enumerate.
+
+> [!warning] The one failure a cache cannot recover from
+> A half-written file that merely *exists* would be served as a hit for the life
+> of the install — one interrupted download and that food's plate is broken
+> forever, with no way for the app to know. So the bytes are written to
+> `<name>.part` and renamed, which is atomic, and the partial file is deleted on
+> the way out. Tested by failing a download and asserting the cache directory is
+> empty afterwards.
+
+**The widget takes an `ImageProvider`, and that seam is the reason any of this
+is testable.** `FileImage` and `MemoryImage` both decode through
+`instantiateImageCodec`, which needs a real event loop — and a widget test body
+runs in fake async that never turns one. The same trap as drift queries in
+`testWidgets` (§2), reached from a completely different direction, and it fails
+the same way: the image never arrives, the frame renders empty, and a golden
+records the wrong thing *while passing*. `PaintedTestImage` rasterises with
+`toImageSync` and is ready on the first frame. `creaturePlateProvider` hands back
+an `ImageProvider` rather than a `File` precisely so a test can substitute one.
+
+**The Bestiary had no golden at all**, which is how a field could be carried into
+a domain object and rendered by nothing for four tasks with nothing noticing. It
+has one now. That is also the only way to review the *treatment*, which is the
+part that mattered: a supermarket photograph on void black fights every other
+surface in the app, so the plate is desaturated to 45%, dimmed, sunk behind a
+gradient scrim that fades into the panel, and framed in the creature's own
+rarity colour. Whether that works is not something an assertion can read — which
+is the argument §5 is making when it asks for a golden rather than a test.
+
+**`remote_food.dart` was documenting something that never happened.** Its comment
+said "T9 writes local capture paths into the same column". Nothing has ever
+written a local path to `Foods.imagePath`; T9 writes entries, not foods. Left
+alone it would have made the column ambiguous exactly when this task needed it
+not to be. Corrected rather than deleted, because the wrong claim is worth
+recording next to the right one.
+
+**Not done here:** the list row still has no thumbnail. T12b's note that "the
+card has no room for it as drawn" is still true of the row and was never true of
+the sheet, which has the width.
+
+**Verified:** `flutter analyze` clean, 839 tests green, `design_gallery.png` and
+the new `bestiary_creature.png` generated and inspected. `flutter build apk
+--release --target-platform android-arm64` succeeds and
+`python tools/check_apk_libs.py` passes — the first run of the build command the
+README gained in T23.

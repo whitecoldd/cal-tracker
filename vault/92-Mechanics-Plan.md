@@ -176,6 +176,11 @@ figure this reads.
 ([bestiary_providers.dart:70](../lib/features/bestiary/bestiary_providers.dart#L70))
 and rendered by nothing.
 
+> [!success] Shipped
+> Fetch-once-into-app-documents, no new dependency. See [[90-Progress-Log]] T26.
+> The Bestiary now has a golden, which is the thing that had been missing all
+> along: a screen with no picture of itself is a screen nobody reviews.
+
 > [!warning] It is a URL, not a file
 > [remote_food.dart:72](../lib/data/remote/remote_food.dart#L72) says so in as
 > many words. So "render the image" means network I/O on a screen that

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../domain/bestiary.dart';
@@ -6,9 +7,11 @@ import '../../domain/harm.dart';
 import '../../domain/nutrition.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
+import '../../widgets/creature_plate.dart';
 import '../../widgets/food_card.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
+import 'bestiary_providers.dart';
 
 /// One creature's full entry.
 ///
@@ -72,6 +75,7 @@ class _Header extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          _Plate(creature: creature),
           Text(creature.name, style: Type.heading(size: 20)),
           if (creature.brand != null)
             Text(creature.brand!, style: Type.lore(size: 12)),
@@ -96,6 +100,38 @@ class _Header extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The creature's picture, if Open Food Facts had one and it could be had.
+///
+/// Silent in every direction: no spinner while it is fetched, no message when
+/// there is nothing to fetch, nothing at all when the network is gone. The
+/// sheet is about the food, and a picture that cannot be shown is not news.
+///
+/// It sits above the name rather than beside it because T12b's note that "the
+/// card has no room for it as drawn" was about the list row, and still is —
+/// this is the sheet, which has the width.
+class _Plate extends ConsumerWidget {
+  const _Plate({required this.creature});
+
+  final Creature creature;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final image = ref
+        .watch(creaturePlateProvider((
+          id: creature.id,
+          url: creature.imagePath,
+        )))
+        .valueOrNull;
+
+    if (image == null) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Space.md),
+      child: CreaturePlate(image: image, accent: creature.rarity.color),
     );
   }
 }

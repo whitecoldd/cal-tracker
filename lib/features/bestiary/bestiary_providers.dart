@@ -1,6 +1,8 @@
+import 'package:flutter/widgets.dart' show ImageProvider, FileImage;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/nutrition_adapter.dart';
+import '../../data/remote/creature_image_store.dart';
 import '../../domain/bestiary.dart';
 import '../../providers/app_providers.dart';
 import '../journal/journal_providers.dart';
@@ -87,4 +89,29 @@ final arrangedBestiaryProvider = Provider<AsyncValue<List<Creature>>>((ref) {
 final bestiaryProgressProvider = Provider<BestiaryProgress>((ref) {
   final creatures = ref.watch(creaturesProvider).valueOrNull ?? const [];
   return progressOf(creatures);
+});
+
+/// The picture store. Overridden in tests, which have neither a network nor a
+/// `path_provider`.
+final creatureImageStoreProvider = Provider<CreatureImageStore>(
+  (ref) => CreatureImageStore(),
+);
+
+/// A creature's plate, fetched once and cached on disk from then on.
+///
+/// Hands back an [ImageProvider] rather than a [File] so that a golden can
+/// substitute a synchronous one: decoding a real image file needs a real event
+/// loop, which a widget test's fake async never turns. The seam is the reason
+/// `CreaturePlate` takes an `ImageProvider` at all.
+///
+/// Keyed on a record rather than on a `Creature`, which has no value equality —
+/// a family keyed by identity would refetch on every rebuild.
+final creaturePlateProvider =
+    FutureProvider.family<ImageProvider?, ({int id, String? url})>(
+        (ref, key) async {
+  final file = await ref
+      .watch(creatureImageStoreProvider)
+      .fileFor(foodId: key.id, url: key.url);
+
+  return file == null ? null : FileImage(file);
 });

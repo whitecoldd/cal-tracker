@@ -6,9 +6,13 @@ import 'package:cal_tracker/features/bestiary/bestiary_providers.dart';
 import 'package:cal_tracker/features/bestiary/bestiary_screen.dart';
 import 'package:cal_tracker/features/bestiary/creature_sheet.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
+import 'package:cal_tracker/widgets/creature_plate.dart';
+import 'package:cal_tracker/widgets/food_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/painted_image.dart';
 
 const _lentils = FoodPanel(
   kcal: 352,
@@ -52,6 +56,7 @@ void main() {
   Future<void> pump(
     WidgetTester tester, {
     List<Creature>? creatures,
+    ImageProvider? plate,
   }) async {
     tester.view.physicalSize = const Size(1080, 2600);
     tester.view.devicePixelRatio = 3;
@@ -65,6 +70,11 @@ void main() {
           creaturesProvider.overrideWith(
             (ref) async => creatures ?? _creatures,
           ),
+          // Overridden for the usual reason and one more: the real store would
+          // reach `path_provider`, which a widget test has no plugin for, and
+          // then the network. `PaintedTestImage` is also ready on the first
+          // frame, which an ordinary decode never is under fake async.
+          creaturePlateProvider.overrideWith((ref, key) async => plate),
         ],
         child: MaterialApp(
           theme: AppTheme.build(),
@@ -112,6 +122,45 @@ void main() {
       final text = visibleText(tester);
       expect(text, contains('eaten 7 times'));
       expect(text, contains('eaten 2 times'));
+    });
+  });
+
+  group('the plate', () {
+    testWidgets('a food with no picture shows no frame at all', (tester) async {
+      // Most foods have none. An empty frame announcing the absence would be
+      // worse than the space it takes.
+      await pump(tester);
+
+      await tester.tap(find.text('Red lentils, dry').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CreatureSheet), findsOneWidget);
+      expect(find.byType(CreaturePlate), findsNothing);
+    });
+
+    testWidgets('a food with a picture shows it above the name',
+        (tester) async {
+      await pump(tester, plate: const PaintedTestImage());
+
+      await tester.tap(find.text('Red lentils, dry').first);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CreaturePlate), findsOneWidget);
+      // Above the name, not beside it — the sheet has the width the list row
+      // does not.
+      final plate = tester.getRect(find.byType(CreaturePlate));
+      final name = tester.getRect(find.text('Red lentils, dry').last);
+      expect(plate.bottom, lessThanOrEqualTo(name.top));
+    });
+
+    testWidgets('the frame takes the rarity accent', (tester) async {
+      await pump(tester, plate: const PaintedTestImage());
+
+      await tester.tap(find.text('Red lentils, dry').first);
+      await tester.pumpAndSettle();
+
+      final widget = tester.widget<CreaturePlate>(find.byType(CreaturePlate));
+      expect(widget.accent, _creatures.first.rarity.color);
     });
   });
 

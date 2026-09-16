@@ -69,9 +69,13 @@ class RemoteFood {
   final double? gramsPerPiece;
   final String? pieceName;
 
-  /// A remote image URL, not a file on disk. Stored in `imagePath` because a
-  /// food has exactly one picture and its origin does not change how it is
-  /// shown; T9 writes local capture paths into the same column.
+  /// A remote image URL, not a file on disk.
+  ///
+  /// `Foods.imagePath` holds exactly this and nothing else — an earlier version
+  /// of this comment claimed T9 wrote local capture paths into the same column,
+  /// which was never true and would have made the column ambiguous. The local
+  /// copy `CreatureImageStore` fetches lives in the cache directory, keyed by
+  /// food id, so a path and a URL are never confused for one another.
   final String? imageUrl;
 
   final FoodSource source;

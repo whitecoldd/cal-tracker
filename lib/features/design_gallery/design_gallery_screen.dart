@@ -1,3 +1,6 @@
+import 'dart:ui' as ui;
+
+import 'package:flutter/foundation.dart' show SynchronousFuture;
 import 'package:flutter/material.dart';
 
 import '../../domain/rarity.dart';
@@ -6,6 +9,7 @@ import '../../domain/signs.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
 import '../../widgets/alchemy_vial.dart';
+import '../../widgets/creature_plate.dart';
 import '../../widgets/food_card.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
@@ -319,6 +323,23 @@ class _DesignGalleryScreenState extends State<DesignGalleryScreen> {
               ],
             ),
           ),
+          _section('Creature plate'),
+          OrnatePanel(
+            title: 'Epic',
+            accent: FoodRarity.epic.color,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CreaturePlate(
+                  image: _PaintedSample(),
+                  accent: FoodRarity.epic.color,
+                ),
+                const SizedBox(height: Space.md),
+                Text('Salted almonds', style: Type.heading(size: 20)),
+                Text('Alesto', style: Type.lore(size: 12)),
+              ],
+            ),
+          ),
           const SizedBox(height: Space.huge),
         ],
       ),
@@ -337,4 +358,58 @@ class _DesignGalleryScreenState extends State<DesignGalleryScreen> {
       ),
     );
   }
+}
+
+/// A stand-in photograph, painted rather than loaded.
+///
+/// The gallery must render with no network and no files, and a golden must be
+/// able to draw it without a real event loop — `MemoryImage` and `FileImage`
+/// both decode asynchronously, which fake async never completes. A picture
+/// recorded and rasterised with `toImageSync` is available on the first frame.
+///
+/// It is a rough food-coloured wash on purpose. What is being reviewed here is
+/// the *treatment* — the frame, the scrim, how much colour survives — and a
+/// recognisable photograph would draw the eye away from exactly that.
+class _PaintedSample extends ImageProvider<_PaintedSample> {
+  static const int _size = 64;
+
+  @override
+  Future<_PaintedSample> obtainKey(ImageConfiguration configuration) =>
+      SynchronousFuture<_PaintedSample>(this);
+
+  @override
+  ImageStreamCompleter loadImage(_PaintedSample key, ImageDecoderCallback _) {
+    return OneFrameImageStreamCompleter(
+      SynchronousFuture<ImageInfo>(ImageInfo(image: _paint())),
+    );
+  }
+
+  ui.Image _paint() {
+    final recorder = ui.PictureRecorder();
+    const rect = Rect.fromLTWH(0, 0, _size * 1.0, _size * 1.0);
+
+    Canvas(recorder, rect)
+      ..drawRect(
+        rect,
+        Paint()
+          ..shader = const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFB07A3C), Color(0xFF6B4A22)],
+          ).createShader(rect),
+      )
+      ..drawCircle(
+        const Offset(_size * 0.62, _size * 0.4),
+        _size * 0.22,
+        Paint()..color = const Color(0xFFD8A657),
+      );
+
+    return recorder.endRecording().toImageSync(_size, _size);
+  }
+
+  @override
+  bool operator ==(Object other) => other is _PaintedSample;
+
+  @override
+  int get hashCode => (_PaintedSample).hashCode;
 }
