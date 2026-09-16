@@ -1664,3 +1664,73 @@ is at rest. Had one changed, the key would have been wrong.
 
 **Verified:** `flutter analyze` clean, 803 tests green, goldens pass without
 regeneration.
+
+---
+
+## T22 — The library that was not there
+**Date:** 2026-09-16
+
+A release APK that installed, launched, and showed "The Path is blocked" on the
+first frame. `Failed to load dynamic library 'libsqlite3.so'`. No code change
+caused it; the build system did, and it did so silently.
+
+**What actually happened, in order.** `sqlite3` 3.x has no Android module — it
+is a Dart *code asset*. Its build hook downloads a prebuilt `libsqlite3.so` per
+ABI into `.dart_tool/hooks_runner/shared/sqlite3/build/download-*/`, and
+`flutter assemble`'s `install_code_assets` step copies them into
+`build/native_assets/android/jniLibs/lib/<abi>/`, a directory the Flutter Gradle
+plugin has registered as a `jniLibs` source dir (`FlutterPlugin.kt:442`, in the
+SDK, not this repo).
+
+On 2026-09-15 a `flutter test --update-goldens` run died with the
+`PathExistsException` on `build/native_assets/windows/sqlite3.dll` that §2 of
+CLAUDE.md warns about — and §2's remedy was `rm -rf build/native_assets`. That
+took `android/jniLibs/` with it. The next `flutter build apk --release` then
+produced an APK with no SQLite in it.
+
+**The part that makes this a trap rather than a mistake.** `install_code_assets`
+declares exactly one output — `native_assets.json` — and that file lives in
+`.dart_tool/flutter_build/<hash>/`, not in `build/native_assets/`. So after the
+wipe the stamp was still valid, the step was skipped, and it would have gone on
+being skipped forever. And Gradle cannot tell: an empty `jniLibs` source
+directory is a legal empty source directory. `flutter analyze` was clean,
+803 tests were green, Gradle reported success, and the APK was broken.
+
+The evidence was all on disk and none of it needed a phone:
+
+| artifact | time | `libsqlite3.so` |
+|---|---|---|
+| `app-arm64-v8a-release.apk` | 09-15 17:12 | present |
+| `app-debug.apk` | 09-15 18:22 | present |
+| *`rm -rf build/native_assets`* | 09-15 18:37 | — |
+| `app-release.apk` | 09-15 19:13 | **absent** |
+
+`build/app/intermediates/merged_jni_libs/release/.../out/` was empty while the
+debug equivalent had all three ABI folders, which places the loss upstream of
+packaging rather than in the release-only `isMinifyEnabled` / `isShrinkResources`
+— neither of which touches `lib/`.
+
+**Three things changed, and no app code.**
+
+`tools/check_apk_libs.py` opens the APK and fails if any ABI folder carrying
+`libflutter.so` lacks `libsqlite3.so`. Keying on the engine rather than on
+`libapp.so` matters: a fat release APK carries plugin `.so` files for ABIs it
+was never built for, because those arrive from AARs, so plugin libraries are not
+evidence that the app targets an ABI. Verified against all three APKs above —
+it passes the two good ones and fails the shipped one.
+
+§2 of CLAUDE.md now says to delete the single half-copied `sqlite3.dll` rather
+than the tree, and §3 has a new subsection explaining the missing-output stamp,
+because "never `rm -rf` this directory" is not a rule anyone can follow without
+knowing why.
+
+The recovery is `rm -f .dart_tool/flutter_build/*/install_code_assets.stamp`,
+which is narrower than `flutter clean` and rebuilds in a fraction of the time.
+
+**What was deliberately not done.** A Gradle-side check that fails the build
+would be automatic rather than remembered, which is better — but the copy is
+produced by a Flutter task and consumed by an AGP task with no declared
+dependency between them, so a `doFirst` assertion on `merge*JniLibFolders`
+could fire on an ordering that is merely unlucky rather than broken. A check
+that fails builds that would have worked is worse than one that runs a second
+after them. The APK itself is the honest thing to inspect.
