@@ -21,6 +21,12 @@ class AiBudget {
   final int usedLastMinute;
   final int perMinuteLimit;
 
+  /// Whether this is the raised cap that credit buys.
+  ///
+  /// Read from the limit rather than stored a second time, so the badge on
+  /// Settings and the number beside it can never disagree.
+  bool get onPaidTier => dailyLimit >= AiCallsDao.paidDailyLimit;
+
   int get remainingToday => (dailyLimit - usedToday).clamp(0, dailyLimit);
   bool get dailyExhausted => usedToday >= dailyLimit;
   bool get rateLimited => usedLastMinute >= perMinuteLimit;

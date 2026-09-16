@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cal_tracker/data/ai/ai_key_store.dart';
 import 'package:cal_tracker/data/ai/openrouter_client.dart';
+import 'package:cal_tracker/data/daos/ai_calls_dao.dart';
 import 'package:cal_tracker/data/database.dart';
 import 'package:cal_tracker/data/tables.dart';
 import 'package:cal_tracker/domain/portion.dart';
@@ -79,6 +80,79 @@ void main() {
       adapter: adapter,
     );
   }
+
+  String standingReply({required bool free}) =>
+      jsonEncode({'data': {'label': 'test', 'is_free_tier': free}});
+
+  group('what the key is worth', () {
+    test('a key with credit raises the cap to a thousand', () async {
+      // The gap this closed: paidDailyLimit and the storage slot behind
+      // setPurchasedCredit both existed from T8, and nothing ever called it, so
+      // a key with credit on it was told it had fifty requests a day.
+      final built = build(replies: [FakeReply.ok(standingReply(free: false))]);
+
+      expect(await built.client.refreshKeyStanding(), isTrue);
+      expect((await built.client.budget()).dailyLimit,
+          AiCallsDao.paidDailyLimit);
+    });
+
+    test('a free key keeps the free cap', () async {
+      final built = build(replies: [FakeReply.ok(standingReply(free: true))]);
+
+      expect(await built.client.refreshKeyStanding(), isFalse);
+      expect((await built.client.budget()).dailyLimit,
+          AiCallsDao.freeDailyLimit);
+    });
+
+    test('it does not spend a request to ask', () async {
+      // CLAUDE.md §4 caps *inference* at four purposes, and this asks no model
+      // anything. Recording it would make the app spend a request to find out
+      // how many requests it has.
+      final built = build(replies: [FakeReply.ok(standingReply(free: false))]);
+
+      await built.client.refreshKeyStanding();
+
+      expect((await built.client.budget()).usedToday, 0);
+    });
+
+    test('with no key it does not even ask', () async {
+      final built = build(replies: [], key: null);
+
+      expect(await built.client.keyStanding(), isNull);
+      expect(built.adapter.callCount, 0);
+    });
+  });
+
+  group('an unanswerable question never demotes a paid key', () {
+    // Every one of these must leave the stored value alone. Returning "free"
+    // on a failure would drop a paying user to fifty requests because their
+    // train went into a tunnel.
+    Future<void> expectKept(FakeReply reply) async {
+      final built = build(replies: [reply], purchased: true);
+
+      expect(await built.client.keyStanding(), isNull);
+      expect(await built.client.refreshKeyStanding(), isTrue);
+      expect((await built.client.budget()).dailyLimit,
+          AiCallsDao.paidDailyLimit);
+    }
+
+    test('a rejected key', () => expectKept(const FakeReply.status(401)));
+    test('a server error', () => expectKept(const FakeReply.status(500)));
+
+    test('a body with no tier in it', () async {
+      await expectKept(FakeReply.ok(jsonEncode({'data': {'label': 'x'}})));
+    });
+
+    test('a tier of the wrong type', () async {
+      await expectKept(
+        FakeReply.ok(jsonEncode({'data': {'is_free_tier': 'yes'}})),
+      );
+    });
+
+    test('a reply that is not the shape at all', () async {
+      await expectKept(FakeReply.ok(jsonEncode({'data': 'nothing useful'})));
+    });
+  });
 
   group('without a key', () {
     test('refuses before touching the network', () async {

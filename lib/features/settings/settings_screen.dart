@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
 import '../../data/ai/ai_key_store.dart';
 import '../../data/daos/ai_calls_dao.dart';
@@ -30,6 +31,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _controller = TextEditingController();
   bool _saving = false;
+  bool _checking = false;
   String? _error;
 
   @override
@@ -56,9 +58,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     await ref.read(aiKeyStoreProvider).write(value);
     _controller.clear();
+
+    // Now that there is a key, ask OpenRouter what it is worth. Not an
+    // inference call and not recorded against the budget — see
+    // `OpenRouterClient.keyStanding`. It fails silently to "whatever is
+    // stored", so binding a key with no signal still works.
+    await ref.read(openRouterClientProvider).refreshKeyStanding();
+
     ref.read(aiCallTickProvider.notifier).spent();
 
     if (mounted) setState(() => _saving = false);
+  }
+
+  /// Re-asks what the key is worth.
+  ///
+  /// Here because the answer can change without the key changing: buying credit
+  /// raises the cap on a key that is already bound, and making the user delete
+  /// and retype a credential to tell the app about it would be absurd.
+  Future<void> _recheck() async {
+    setState(() => _checking = true);
+
+    await ref.read(openRouterClientProvider).refreshKeyStanding();
+    ref.read(aiCallTickProvider.notifier).spent();
+
+    if (mounted) setState(() => _checking = false);
   }
 
   Future<void> _forget() async {
@@ -86,7 +109,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: Space.md),
               if (available.valueOrNull ?? false)
-                _KeyPresent(onForget: _saving ? null : _forget)
+                _KeyPresent(
+                  onForget: _saving || _checking ? null : _forget,
+                  onRecheck: _saving || _checking ? null : _recheck,
+                  checking: _checking,
+                )
               else
                 _KeyEntry(
                   controller: _controller,
@@ -453,9 +480,15 @@ class _KeyEntry extends StatelessWidget {
 }
 
 class _KeyPresent extends StatelessWidget {
-  const _KeyPresent({required this.onForget});
+  const _KeyPresent({
+    required this.onForget,
+    required this.onRecheck,
+    required this.checking,
+  });
 
   final VoidCallback? onForget;
+  final VoidCallback? onRecheck;
+  final bool checking;
 
   @override
   Widget build(BuildContext context) {
@@ -476,6 +509,11 @@ class _KeyPresent extends StatelessWidget {
         ),
         const SizedBox(height: Space.md),
         WitcherButton(
+          label: checking ? 'Asking…' : 'Check the allowance again',
+          onPressed: onRecheck,
+        ),
+        const SizedBox(height: Space.sm),
+        WitcherButton(
           label: 'Forget it',
           onPressed: onForget,
           tone: ButtonTone.danger,
@@ -484,6 +522,10 @@ class _KeyPresent extends StatelessWidget {
     );
   }
 }
+
+/// `1000` as `1,000`. The bar beside it is a count, not prose, and is left as
+/// the bare figure it has always been.
+String _thousands(int n) => NumberFormat.decimalPattern('en').format(n);
 
 class _Budget extends StatelessWidget {
   const _Budget({required this.budget});
@@ -506,6 +548,22 @@ class _Budget extends StatelessWidget {
                 valueLabel: '${value.usedToday} of ${value.dailyLimit}',
               ),
               const RunicDivider(),
+              Text(
+                value.onPaidTier
+                    ? 'Credit found on this key, so the allowance is '
+                        '${_thousands(value.dailyLimit)} a day rather than '
+                        '${AiCallsDao.freeDailyLimit}.'
+                    : 'No credit on this key, so the free allowance of '
+                        '${AiCallsDao.freeDailyLimit} a day applies. Buying '
+                        'any credit raises it to '
+                        '${_thousands(AiCallsDao.paidDailyLimit)} — ask again '
+                        'above afterwards and this will follow.',
+                style: Type.lore(
+                  size: 12,
+                  color: value.onPaidTier ? Hue.gold : Hue.parchmentDim,
+                ),
+              ),
+              const SizedBox(height: Space.sm),
               Text(
                 value.dailyExhausted
                     ? 'Spent for today. The app works as it always does; only '

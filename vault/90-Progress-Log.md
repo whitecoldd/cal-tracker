@@ -2031,3 +2031,68 @@ the new `bestiary_creature.png` generated and inspected. `flutter build apk
 --release --target-platform android-arm64` succeeds and
 `python tools/check_apk_libs.py` passes — the first run of the build command the
 README gained in T23.
+
+---
+
+## T27 — Asking what the key is worth
+**Date:** 2026-09-16
+
+Reported from use: *"my key is 10 bucks prepaid so it has a 1000 request limit,
+but the app says 50."* 839 → 848 tests.
+
+**The seventh instance of this project's one recurring fault.** Everything was
+built. `AiCallsDao.paidDailyLimit` is 1,000 and has been since T8. `budget()`
+takes a `hasPurchasedCredit` flag and picks between the two caps.
+`AiKeyStore.setPurchasedCredit` exists with a secure-storage slot behind it, and
+`OpenRouterClient.budget()` reads it on every call. **`setPurchasedCredit` had
+zero callers.** The flag could only ever be false, so the app told a funded key
+it had fifty requests a day and refused, at request fifty-one, to read a meal
+OpenRouter would have answered.
+
+Same shape as `upsertWater` (T17), `estimatePortion` (T20), `applyToXp` and
+`withAdrenaline` (T24), and `imagePath` (T26). The mechanism, the storage, the
+constant and the branch — everything except the twenty lines that reach them.
+
+**Asked rather than toggled.** A switch in Settings would have closed the gap in
+a fraction of the code, and it would have been a question the app makes the user
+answer about an account the app can see. `GET /api/v1/key` reports
+`is_free_tier`, so binding a key now asks, and the answer is written to the flag
+that was already there.
+
+> [!note] Not a fifth AI purpose
+> `../CLAUDE.md` §4 caps *inference* at four purposes and requires a deliberate
+> decision to add a fifth. This asks no model anything — it reads account
+> metadata, the way checking a balance is not a purchase. It is deliberately
+> **not** written to `ai_calls`: that table is the generation budget, and
+> recording a metadata read there would make the app spend a request to find out
+> how many requests it has. There is a test asserting `usedToday` stays at zero.
+
+**Unknown is not the same as free, and that distinction is the whole safety of
+it.** Unreachable, a 401, a 500, a body with no `is_free_tier`, a field of the
+wrong type, a reply that is not the shape at all — every one returns null and
+leaves whatever is stored alone. Returning "free" on a failure would drop a
+paying user to fifty requests because their train went into a tunnel. Six tests
+cover exactly that, all asserting the paid cap survives.
+
+Only one field is read. `usage` and `limit` describe money and move with
+spending; the tier is what the request cap follows, and trusting one number
+rather than three leaves less to be wrong about in somebody else's JSON.
+
+**There is a "check the allowance again" button**, because the answer can change
+without the key changing. Buying credit raises the cap on a key that is already
+bound, and making someone delete and retype a credential to tell the app about
+it would be absurd.
+
+**The shared fake could not answer a GET.** `FakeOpenRouterAdapter` did
+`Map.from(options.data as Map)`, and a GET has no body, so the cast threw a
+`TypeError` — which the client's terminal catch swallowed into "unanswerable".
+The first run of the new test failed for a reason that had nothing to do with
+the code under test. Fixed at the fake, not worked around at the call site: it
+is the only description of what the wire looks like, and it now describes both
+endpoints.
+
+**Verified:** `flutter analyze` clean, 848 tests green, `settings_bound.png` and
+`settings_no_key.png` regenerated and inspected. Whether OpenRouter's reply
+really carries `is_free_tier` is the one thing no test here can settle — the
+fake is our description of the wire, not theirs. It fails safe either way: an
+unrecognised reply leaves the cap where it was.

@@ -47,6 +47,20 @@ final class AiUnreadable extends AiFailure {
   const AiUnreadable(super.message);
 }
 
+/// What OpenRouter says about a key, as opposed to what a model says.
+class AiKeyStanding {
+  const AiKeyStanding({required this.isFreeTier});
+
+  /// True while the account has never had credit on it.
+  ///
+  /// The only field read from the reply. It decides the request cap: 50 a day
+  /// free, 1,000 once anything has been bought.
+  final bool isFreeTier;
+
+  int get dailyLimit =>
+      isFreeTier ? AiCallsDao.freeDailyLimit : AiCallsDao.paidDailyLimit;
+}
+
 /// OpenRouter, over its OpenAI-compatible chat completions API.
 ///
 /// Three rules shape this class, all from CLAUDE.md §4:
@@ -89,11 +103,87 @@ class OpenRouterClient {
   static const String endpoint =
       'https://openrouter.ai/api/v1/chat/completions';
 
+  /// Where OpenRouter describes the key itself rather than answering with a
+  /// model. Not an inference endpoint — see [keyStanding].
+  static const String keyEndpoint = 'https://openrouter.ai/api/v1/key';
+
   /// Whether a key exists at all. Cheap, and drives whether the UI offers AI.
   Future<bool> get hasKey async => await _keys.read() != null;
 
   Future<AiBudget> budget() async =>
       _calls.budget(hasPurchasedCredit: await _keys.hasPurchasedCredit());
+
+  /// Asks OpenRouter what this key is, so the cap does not have to be guessed.
+  ///
+  /// The daily allowance is 50 requests at a zero balance and 1,000 once any
+  /// credit has been bought. The app has known both numbers since T8 and had no
+  /// way to tell which applied — `setPurchasedCredit` existed, with a secure
+  /// storage slot behind it, and nothing ever called it. So a key with credit
+  /// on it was told it had fifty requests a day, and the app would refuse to
+  /// read a meal that OpenRouter would happily have answered.
+  ///
+  /// > **This is not a fifth AI use case.** CLAUDE.md §4 caps *inference* at
+  /// > four purposes and this asks no model anything — it reads account
+  /// > metadata, the way checking a balance is not a purchase. It is deliberately
+  /// > not written to `ai_calls`: that table is the generation budget, and
+  /// > recording a metadata read there would make the app spend a request to
+  /// > find out how many requests it has.
+  ///
+  /// Returns null for *unknown*, which is different from free: unreachable, a
+  /// rejected key, a body that does not carry the field, or a field of an
+  /// unexpected type all mean the caller should leave whatever is stored alone
+  /// rather than quietly demoting a paid key to 50 because the network blinked.
+  Future<AiKeyStanding?> keyStanding() async {
+    final key = await _keys.read();
+    if (key == null) return null;
+
+    try {
+      final response = await _dio
+          .get<Map<String, dynamic>>(
+            keyEndpoint,
+            options: Options(
+              headers: {
+                'Authorization': 'Bearer $key',
+                'HTTP-Referer': 'https://github.com/whitecoldd/cal-tracker',
+                'X-Title': "The Witcher's Diet",
+              },
+              validateStatus: (_) => true,
+            ),
+          )
+          .timeout(_timeout);
+
+      if (response.statusCode != 200) return null;
+
+      final data = response.data?['data'];
+      if (data is! Map) return null;
+
+      // Only this one field is trusted. `usage` and `limit` describe money and
+      // move with spending; the tier is the thing the request cap follows, and
+      // reading one number rather than three leaves less to be wrong about
+      // somebody else's JSON.
+      final free = data['is_free_tier'];
+      if (free is! bool) return null;
+
+      return AiKeyStanding(isFreeTier: free);
+    } catch (_) {
+      // Terminal on purpose, as in T16 and T26: this is somebody else's JSON
+      // over somebody else's network, and no failure here is worth surfacing
+      // on a settings screen. Unknown is a safe answer.
+      return null;
+    }
+  }
+
+  /// Asks, and writes the answer down if there was one.
+  ///
+  /// Returns what is stored afterwards, which is the previous value when the
+  /// question could not be answered.
+  Future<bool> refreshKeyStanding() async {
+    final standing = await keyStanding();
+    if (standing == null) return _keys.hasPurchasedCredit();
+
+    await _keys.setPurchasedCredit(value: !standing.isFreeTier);
+    return !standing.isFreeTier;
+  }
 
   /// Turns a line of everyday text into items.
   Future<ParsedMeal> parseMeal(String text) async {

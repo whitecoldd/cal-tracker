@@ -29,13 +29,19 @@ class FakeOpenRouterAdapter implements HttpClientAdapter {
   final List<FakeReply> replies;
 
   final List<Map<String, dynamic>> requests = [];
+
+  /// Every URL asked for, in order. The client talks to two endpoints now.
+  final List<String> paths = [];
   final List<Map<String, List<String>>> headers = [];
 
   int get callCount => requests.length;
 
   /// The models asked, in the order they were asked.
+  ///
+  /// Requests with no model are skipped rather than crashing: not every call
+  /// the client makes is an inference call.
   List<String> get modelsTried =>
-      requests.map((r) => r['model'] as String).toList();
+      [for (final r in requests) ?(r['model'] as String?)];
 
   /// Every request body as one JSON string, for scanning.
   String get wire => jsonEncode(requests);
@@ -47,14 +53,19 @@ class FakeOpenRouterAdapter implements HttpClientAdapter {
     Future<void>? cancelFuture,
   ) async {
     // At the adapter layer Dio has not serialised the body yet, so `data` is
-    // still the map the client built. Handle both shapes so the fake does not
-    // depend on where in the pipeline it is installed.
+    // still the map the client built. Handle every shape so the fake does not
+    // depend on where in the pipeline it is installed — including *no* body,
+    // which is what the key-standing GET sends. Casting that to a Map threw a
+    // TypeError the client swallowed, so the call looked unanswerable rather
+    // than unasked.
     final data = options.data;
-    requests.add(
-      data is String
-          ? jsonDecode(data) as Map<String, dynamic>
-          : Map<String, dynamic>.from(data as Map),
-    );
+    requests.add(switch (data) {
+      null => const <String, dynamic>{},
+      final String body => jsonDecode(body) as Map<String, dynamic>,
+      final Map<Object?, Object?> body => Map<String, dynamic>.from(body),
+      _ => <String, dynamic>{'body': data.toString()},
+    });
+    paths.add(options.uri.toString());
     headers.add({
       for (final entry in options.headers.entries)
         entry.key: [entry.value.toString()],
