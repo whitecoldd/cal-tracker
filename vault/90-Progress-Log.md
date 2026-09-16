@@ -2553,3 +2553,51 @@ adapter will do the counting.
 
 **Verified:** `flutter analyze` clean, 944 tests green. No goldens touched —
 nothing renders yet.
+
+## T36 — Tendencies, goods and bads
+**Date:** 2026-09-16
+
+The second pure file: `domain/week_findings.dart` turns a `WeekPattern` into
+statements a person can read. Twenty-one of them, in two tones. 944 → 963
+tests.
+
+**Both tones, and the cap is per tone rather than overall.** A single sorted
+list would let warnings take every slot in a bad week, and the report would
+become a scolding — which §7 rules out in substance, not only in wording. So
+`topFindings` takes a `Tone` and caps at three, and a week of nothing but
+crisps still has its boons read out. There is a test for exactly that.
+
+**The guideline travels with the accusation.** Every warning resting on a
+published figure carries it in `Finding.basis`, verbatim from `HarmKind.basis`
+— the rule `_Curse` has followed on Alchemy since T6. A test enumerates which
+codes rest on a guideline and fails if one of them accuses without stating the
+figure.
+
+**`FindingCode` exists so the tests outlive the prose.** The wording will be
+revised; assertions on strings would have to be revised with it. Tests assert
+on the code and on the *rules* the wording must obey.
+
+**Two wording rules, and the second one found something real.** The first
+forbids *should / try to / aim for / next week / healthy / unhealthy / risk of
+/ diagnos*. The second forbids stating a direction — and it failed twice, both
+times on a unit rather than a leak: "14 g of fibre **per 1000 kcal**" and
+"1.6 g of protein **per kg**".
+
+That is worth writing down, because the easy move was to ban the tokens and
+reword around them. **A density is not a quantity.** "14 g per 1000 kcal" says
+how the food was composed and contains no amount of anything; "1,850 kcal a
+day" is an amount, and a reader who knows their own expenditure subtracts it
+into a verdict in their head. "81.4 kg" is the verdict outright. So the test
+now strips the two density units the nutrition engine actually uses and then
+asserts neither token survives — the unit is allowed, the amount is not, and
+the distinction is written down rather than left to whoever adds the next
+finding.
+
+**One threshold is asymmetric on purpose.** Salt needs to pass the guideline on
+*half* the logged days before it is called a tendency; sugar and saturated fat
+need two days. Sodium is over the WHO figure in most western diets on most
+days, so a lower bar would fire every week for everyone and stop meaning
+anything.
+
+**Verified:** `flutter analyze` clean, 963 tests green. No goldens — still
+nothing rendered.

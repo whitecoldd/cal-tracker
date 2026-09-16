@@ -1,7 +1,7 @@
 name: cal_tracker
 description: "The Witcher's Diet - a gamified food, activity and body tracker that seals the verdict until week's end."
 publish_to: 'none'
-version: 1.0.2+3
+version: 1.0.3+4
 
 environment:
   sdk: ^3.11.4

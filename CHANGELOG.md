@@ -23,6 +23,14 @@ its line to it.
 
 ---
 
+## 1.0.3+4 — Tendencies, goods and bads
+
+- `domain/week_findings.dart`: twenty-one statements a week can support, in
+  two tones. Warnings carry the public guideline they rest on; boons are read
+  out even in a bad week, because a report that only accuses is not a report.
+- Capped at three per tone, so one tone can never take every slot.
+- Still nothing user-visible.
+
 ## 1.0.2+3 — Read the week without opening the seal
 
 - `domain/week_pattern.dart`: the descriptive half of a week — curses folded
