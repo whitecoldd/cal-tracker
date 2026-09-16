@@ -23,6 +23,14 @@ its line to it.
 
 ---
 
+## 1.0.4+5 — The tale the app can tell itself
+
+- `domain/weekly_tale.dart`: the week as prose, in titled sections. Written by
+  a model at the seal where there is a key, and by the app from the same
+  figures where there is not — so The Tale is never an empty panel.
+- Accounts stored by 1.0.x as a plain paragraph still read back, so the richer
+  account needs no migration and no new column.
+
 ## 1.0.3+4 — Tendencies, goods and bads
 
 - `domain/week_findings.dart`: twenty-one statements a week can support, in

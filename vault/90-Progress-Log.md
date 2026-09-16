@@ -2601,3 +2601,40 @@ anything.
 
 **Verified:** `flutter analyze` clean, 963 tests green. No goldens — still
 nothing rendered.
+
+## T37 — The tale the app can tell itself
+**Date:** 2026-09-16
+
+The third pure file: `domain/weekly_tale.dart`, the week as prose. Still no UI
+and still no AI — this is the shape both writers will fill. 963 → 978 tests.
+
+**Two sources, one document.** `TaleSource.written` is a model, once, at the
+seal. `TaleSource.told` is the app, from its own figures, for a user with no
+key, no network or no allowance left. They share the section titles
+deliberately, so the reader is looking at the same document either way and the
+provenance line is the only difference. §4 demands the app stay fully usable
+without AI; an empty second mode would have failed that in spirit while
+passing it in letter.
+
+**The seal is kept in two places, and they are different places on purpose.**
+`tellPattern` takes only a `WeekPattern` and its findings, neither of which
+has a verdict field, so it is safe on any day. `tellVerdict` takes
+`NarrativeFacts`, which cannot be constructed from a week that has not closed.
+The app's own prose and the model's prose are therefore locked by **one** rule
+rather than two that could drift apart — which is the whole reason the
+fallback takes the same guard type rather than reading the `Reckoning`
+directly.
+
+**Decode accepts three shapes, and the middle one is why there is no
+migration.** Structured JSON is what this version writes. A **plain
+paragraph** is what every week sealed under 1.0.x holds, and it comes back as
+a single section rather than as nothing. Null or unreadable comes back null.
+Malformed JSON falls through to being shown as prose rather than discarded: a
+stored account is worth showing imperfectly, and there is exactly one of them
+per week and no way to get it again.
+
+**The same density-versus-quantity rule as T36**, now applied to prose. The
+Tale's pattern half is rendered mid-week, so its test strips the two density
+units and then asserts that neither `kcal` nor `kg` survives.
+
+**Verified:** `flutter analyze` clean, 978 tests green. No goldens.
