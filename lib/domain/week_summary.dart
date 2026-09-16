@@ -9,6 +9,8 @@ import 'dart:convert';
 
 import 'reckoning.dart';
 import 'sealed_value.dart';
+import 'week_findings.dart';
+import 'week_pattern.dart';
 
 /// Experience earned in a week.
 ///
@@ -202,15 +204,24 @@ class NarrativeFacts {
     required this.projectedChangeKg,
     required this.averageVitality,
     required this.steps,
+    required this.pattern,
+    required this.findings,
     this.weightDeltaKg,
     this.trend,
   });
 
   /// Builds the facts, or returns null if the week is still sealed.
+  ///
+  /// [pattern] and [findings] describe what was eaten, and carry no verdict
+  /// of their own — see `week_pattern.dart`. Widening this type with them is
+  /// therefore safe: the guard below is a check on the [Reckoning], so nothing
+  /// about the descriptive half can forge a revealed week.
   static NarrativeFacts? from(
     Reckoning reckoning, {
     required double averageVitality,
     required int steps,
+    required WeekPattern pattern,
+    required List<Finding> findings,
   }) {
     if (!reckoning.isRevealed) return null;
 
@@ -231,6 +242,8 @@ class NarrativeFacts {
       projectedChangeKg: projected.value,
       averageVitality: averageVitality,
       steps: steps,
+      pattern: pattern,
+      findings: findings,
       weightDeltaKg: reckoning.weightDeltaKg.valueOrNull,
       trend: reckoning.trend.valueOrNull,
     );
@@ -242,6 +255,13 @@ class NarrativeFacts {
   final double projectedChangeKg;
   final double averageVitality;
   final int steps;
+
+  /// What was eaten. No verdict in it — see `week_pattern.dart`.
+  final WeekPattern pattern;
+
+  /// What the week tended towards, both tones.
+  final List<Finding> findings;
+
   final double? weightDeltaKg;
   final WeightTrend? trend;
 }

@@ -23,6 +23,14 @@ its line to it.
 
 ---
 
+## 1.0.7+8 — Give the account something to account for
+
+- The weekly narrative now sees what was eaten: composition, curses with the
+  food that carried them, the E-numbers, and the week's tendencies.
+- It comes back in four named sections instead of one paragraph, so The Tale
+  has something to lay out. Still exactly one call per week.
+- Accounts written by 1.0.x still read back unchanged.
+
 ## 1.0.6+7 — A switch that belongs to this world
 
 - `RunicTabs`: the app's first segmented control, painted rather than

@@ -1,6 +1,14 @@
 import 'package:cal_tracker/data/ai/prompts.dart';
+import 'package:cal_tracker/domain/nutrition.dart';
 import 'package:cal_tracker/domain/portion.dart';
+import 'package:cal_tracker/domain/reckoning.dart';
+import 'package:cal_tracker/domain/reveal_gate.dart';
+import 'package:cal_tracker/domain/week_findings.dart';
+import 'package:cal_tracker/domain/week_pattern.dart';
+import 'package:cal_tracker/domain/week_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'support/week_fixtures.dart';
 
 /// Every prompt a daily interaction can send.
 ///
@@ -154,6 +162,22 @@ void main() {
       }
     });
 
+    test('the narrative may describe food but never call it healthy', () {
+      final narrative = Prompts.narrativeSystem().toLowerCase();
+
+      expect(narrative, contains('never call a food healthy or'));
+      expect(narrative, contains('never advise a change'));
+    });
+
+    test('the narrative may not invent a food, an additive or a day', () {
+      // It is now given actual food names and E-numbers, which is exactly the
+      // material a model embellishes if it is not told not to.
+      final narrative = Prompts.narrativeSystem().toLowerCase();
+
+      expect(narrative, contains('use only the figures given'));
+      expect(narrative, contains('never name an additive, a food or a day'));
+    });
+
     test('the narrative is told not to congratulate or scold', () {
       final narrative = Prompts.narrativeSystem().toLowerCase();
 
@@ -162,6 +186,82 @@ void main() {
       // A target for next week would be the app setting a goal from a verdict,
       // which is the daily screens' problem arriving a week later.
       expect(narrative, contains('do not suggest a target'));
+    });
+  });
+
+  group('the narrative prompt carries what was eaten', () {
+    NarrativeFacts factsFor(WeekPattern pattern) => NarrativeFacts.from(
+          reckon(
+            anyDayOfWeek: fixtureSunday,
+            today: fixtureSunday,
+            gate: const RevealGate(weekEndsOn: DateTime.sunday),
+            days: [
+              for (var i = 0; i < 7; i++)
+                DayEnergy(
+                  day: fixtureMonday.addDays(i),
+                  intakeKcal: 1800,
+                  expenditureKcal: 2400,
+                ),
+            ],
+            startWeightKg: 82,
+            endWeightKg: 81.1,
+          ),
+          averageVitality: 61,
+          steps: 54000,
+          pattern: pattern,
+          findings: readFindings(pattern),
+        )!;
+
+    test('names the additives and the food that carried a curse', () {
+      final prompt = Prompts.narrativeUser(factsFor(fixturePattern()));
+
+      expect(prompt, contains('what was eaten'));
+      expect(prompt, contains('Additives:'));
+      expect(prompt, contains('E330'));
+      expect(prompt, contains('Composition:'));
+    });
+
+    test('still carries the verdict block it always did', () {
+      final prompt = Prompts.narrativeUser(factsFor(fixturePattern()));
+
+      expect(prompt, contains('Energy balance:'));
+      expect(prompt, contains('Measured weight change:'));
+    });
+
+    test('stays bounded however much was logged', () {
+      // The caps are the point: this block must not grow with the size of the
+      // food library, or a heavy week would send a prompt several times the
+      // size of a light one for no extra insight.
+      final huge = readWeek(
+        weekStart: fixtureMonday,
+        weekEnd: fixtureSunday,
+        throughDay: fixtureSunday,
+        portions: [
+          for (var day = 0; day < 7; day++)
+            for (var i = 0; i < 40; i++)
+              LoggedPortion(
+                day: fixtureMonday.addDays(day),
+                food: FoodIdentity(id: i, name: 'Food $i'),
+                serving: Serving(
+                  food: FoodPanel(
+                    kcal: 300,
+                    sodiumMg: 400,
+                    novaGroup: 4,
+                    additives: ['E${100 + i}'],
+                  ),
+                  grams: 100,
+                ),
+              ),
+        ],
+      );
+
+      final prompt = Prompts.narrativeUser(factsFor(huge));
+
+      expect(
+        prompt.split('\n'),
+        hasLength(lessThan(40)),
+        reason: 'the descriptive block grew with the journal: $prompt',
+      );
     });
   });
 

@@ -160,16 +160,41 @@ abstract final class AiSchemas {
         },
       };
 
-  /// The single weekly narrative.
+  /// The single weekly narrative, in four named sections.
+  ///
+  /// Four rather than one because The Tale lays them out as separate panels,
+  /// and four rather than five because a *closing* field is exactly where a
+  /// model reaches for "next week, try…" — which CLAUDE.md §7 forbids. The app
+  /// supplies its own closing: the disclaimer.
+  ///
+  /// Each extra required string is another chance a free model trips `strict`,
+  /// and `_structured` records every attempt against the daily budget. If
+  /// these start failing in practice, collapse to two rather than retrying.
   static Map<String, dynamic> get narrative => {
         'name': 'weekly_narrative',
         'strict': true,
         'schema': {
           'type': 'object',
           'additionalProperties': false,
-          'required': ['text'],
+          'required': ['opening', 'the_table', 'the_curses', 'the_boons'],
           'properties': {
-            'text': {'type': 'string'},
+            'opening': {
+              'type': 'string',
+              'description': 'the week in one breath',
+            },
+            'the_table': {
+              'type': 'string',
+              'description': 'what was eaten and how it was composed',
+            },
+            'the_curses': {
+              'type': 'string',
+              'description': 'what the week carried, as figures against '
+                  'published guidelines',
+            },
+            'the_boons': {
+              'type': 'string',
+              'description': 'what the week held well',
+            },
           },
         },
       };

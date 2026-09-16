@@ -360,6 +360,11 @@ final archivedWeekProvider = FutureProvider<ArchivedWeek?>((ref) async {
     dailyWeights: [for (final w in weights) w.kg],
   );
 
+  // Read through the provider rather than folded again here: the account and
+  // the Tally must describe the same week, and computing the pattern twice is
+  // two chances for them to disagree.
+  final pattern = await ref.watch(weekPatternProvider.future);
+
   return archive.seal(
     reckoning: reckoning,
     summary: summary,
@@ -368,6 +373,8 @@ final archivedWeekProvider = FutureProvider<ArchivedWeek?>((ref) async {
       reckoning,
       averageVitality: averageVitality,
       steps: steps,
+      pattern: pattern,
+      findings: readFindings(pattern),
     ),
   );
 });

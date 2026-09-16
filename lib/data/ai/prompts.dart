@@ -12,6 +12,7 @@
 library;
 
 import '../../domain/portion.dart';
+import '../../domain/week_findings.dart';
 import '../../domain/week_summary.dart';
 
 abstract final class Prompts {
@@ -190,7 +191,76 @@ Task: estimate the weight in grams of a described portion of one food.
     final trend = facts.trend;
     if (trend != null) buffer.writeln('Direction: ${trend.label}');
 
+    _whatWasEaten(buffer, facts);
+
     return buffer.toString().trim();
+  }
+
+  /// The descriptive half, capped at every turn.
+  ///
+  /// The caps are the point: this block must not grow with the size of the
+  /// food library, or a heavy week would send a prompt several times the size
+  /// of a light one for no extra insight.
+  static void _whatWasEaten(StringBuffer buffer, NarrativeFacts facts) {
+    final pattern = facts.pattern;
+
+    buffer
+      ..writeln()
+      ..writeln('--- what was eaten ---');
+
+    if (pattern.macros.isNotEmpty) {
+      buffer.writeln(
+        'Composition: ${pattern.macros.map(
+              (m) => '${m.label.toLowerCase()} '
+                  '${(m.share * 100).round()}%',
+            ).join(', ')} of energy',
+      );
+    }
+
+    final quality = pattern.quality;
+    buffer
+      ..writeln(
+        'Fibre: ${quality.meanFibrePer1000Kcal.toStringAsFixed(1)} g per 1000 '
+        'kcal. Whole food: ${(quality.wholeFoodShare * 100).round()}% of '
+        'energy. Ultra-processed: '
+        '${(quality.ultraProcessedShare * 100).round()}%.',
+      )
+      ..writeln(
+        'Clean days (under every guideline): ${quality.cleanDays} of '
+        '${pattern.loggedDays} logged.',
+      );
+
+    final curses = pattern.curses.take(5);
+    if (curses.isNotEmpty) {
+      buffer.writeln('Curses, worst first:');
+      for (final curse in curses) {
+        buffer.writeln(
+          '  ${curse.kind.title} — ${curse.daysPastGuideline} of '
+          '${curse.loggedDays} logged days past the guideline'
+          '${curse.carriers.isEmpty ? '' : ', carried mostly by '
+              '${curse.carriers.first.food.name}'}',
+        );
+      }
+    }
+
+    if (pattern.additiveCount > 0) {
+      final named = pattern.additives.take(10).map((a) => a.code).join(', ');
+      buffer.writeln(
+        'Additives: ${pattern.additiveCount} distinct across the week'
+        '${named.isEmpty ? '' : ' — $named'}',
+      );
+    }
+
+    final noted = [
+      ...topFindings(facts.findings, Tone.warning),
+      ...topFindings(facts.findings, Tone.boon),
+    ];
+    if (noted.isNotEmpty) {
+      buffer.writeln('Noted:');
+      for (final finding in noted) {
+        buffer.writeln('  ${finding.title} — ${finding.detail}');
+      }
+    }
   }
 
   /// System prompt for the single weekly narrative.
@@ -204,9 +274,15 @@ $_house
 Exception to the rules above, for this task only: you are given the week's
 figures because the week has closed and the user is reading them now.
 
-Task: write a short account of the week in the voice of a witcher's journal.
-- Three to five sentences. No lists, no headings.
+Task: write the week's account in the voice of a witcher's journal, in four
+sections matching the schema.
+- Each section is two to four sentences of plain prose. No lists, no headings,
+  no bullet points inside a section.
 - State what happened plainly. Do not congratulate or scold.
 - Do not give medical advice or predict health outcomes.
-- Do not suggest a target for next week.''';
+- Do not suggest a target for next week, and do not compare with any other week.
+- You are also given what was eaten. Describe it. Never call a food healthy or
+  unhealthy, and never advise a change.
+- Use only the figures given. Never name an additive, a food or a day that does
+  not appear in them.''';
 }

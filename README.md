@@ -152,7 +152,7 @@ read the Markdown on GitHub. [`00-Index`](vault/00-Index.md) is the way in;
 task, with the reasoning.
 
 ```bash
-flutter analyze && flutter test          # 996 tests
+flutter analyze && flutter test          # 1003 tests
 flutter test --update-goldens --tags golden   # after a deliberate visual change
 ```
 

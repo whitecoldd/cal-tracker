@@ -85,6 +85,8 @@ NarrativeFacts _facts() => NarrativeFacts.from(
       _revealed(),
       averageVitality: 61,
       steps: 54000,
+      pattern: _fullWeek(),
+      findings: readFindings(_fullWeek()),
     )!;
 
 String _body(List<TaleSection> sections) =>
@@ -181,6 +183,8 @@ void main() {
         ),
         averageVitality: 50,
         steps: 1000,
+        pattern: _fullWeek(),
+        findings: const [],
       )!;
 
       expect(tellVerdict(thin).body, contains('not enough weigh-ins'));
@@ -200,6 +204,8 @@ void main() {
           ),
           averageVitality: 50,
           steps: 0,
+          pattern: _week(const []),
+          findings: const [],
         );
 
         expect(

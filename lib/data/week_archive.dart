@@ -6,6 +6,7 @@ import '../domain/day.dart';
 import '../domain/mutagens.dart';
 import '../domain/reckoning.dart';
 import '../domain/week_summary.dart';
+import '../domain/weekly_tale.dart';
 import 'ai/openrouter_client.dart';
 import 'daos/weeks_dao.dart';
 import 'database.dart';
@@ -111,9 +112,12 @@ class WeekArchive {
   /// or no budget left still has all its figures — the account is flavour on
   /// top of them, and refusing to seal the week because a model was
   /// unreachable would lose the numbers to save the prose.
+  /// Stored as JSON so The Tale keeps its sections. `WeeklyTale.decode` still
+  /// reads the plain paragraph 1.0.x wrote, so the column needs no migration.
   Future<String?> _narrative(NarrativeFacts facts) async {
     try {
-      return await _ai.weeklyNarrative(facts);
+      final tale = await _ai.weeklyNarrative(facts);
+      return tale == null ? null : WeeklyTale.encode(tale);
     } on AiFailure {
       return null;
     }

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:cal_tracker/data/ai/ai_decode.dart';
 import 'package:cal_tracker/domain/portion.dart';
+import 'package:cal_tracker/domain/weekly_tale.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// A chat-completions body with [content] as the assistant's message.
@@ -349,9 +350,35 @@ void main() {
   });
 
   group('narrative decoding', () {
-    test('reads the text', () {
-      expect(AiDecode.narrative({'text': 'The week was long.'}),
-          'The week was long.');
+    test('reads the four sections, in the order The Tale lays them out', () {
+      final tale = AiDecode.narrative({
+        'opening': 'A hard week.',
+        'the_table': 'Bread and salt.',
+        'the_curses': 'Salt on most days.',
+        'the_boons': 'Fibre held.',
+      })!;
+
+      expect(tale.sections, hasLength(4));
+      expect(tale.sections.first.title, TaleTitles.opening);
+      expect(tale.sections.first.body, 'A hard week.');
+      expect(tale.sections.last.body, 'Fibre held.');
+      expect(tale.source, TaleSource.written);
+    });
+
+    test('still reads the single field the 1.0.x schema used', () {
+      // An older reply shape must not become an empty panel.
+      final tale = AiDecode.narrative({'text': 'The week was long.'})!;
+
+      expect(tale.sections.single.body, 'The week was long.');
+    });
+
+    test('drops a section that came back empty', () {
+      final tale = AiDecode.narrative({
+        'opening': 'A hard week.',
+        'the_table': '   ',
+      })!;
+
+      expect(tale.sections, hasLength(1));
     });
 
     test('an empty narrative is null rather than an empty panel', () {

@@ -3,6 +3,7 @@ import 'dart:convert';
 import '../../domain/nutrition.dart';
 import '../../domain/parsed_meal.dart';
 import '../../domain/portion.dart';
+import '../../domain/weekly_tale.dart';
 
 /// Turns an OpenRouter reply into the app's own types.
 ///
@@ -162,10 +163,32 @@ abstract final class AiDecode {
     );
   }
 
-  /// Decodes the weekly narrative.
-  static String? narrative(Map<String, dynamic> json) {
-    final text = (json['text'] as String?)?.trim();
-    return (text == null || text.isEmpty) ? null : text;
+  /// Decodes the weekly narrative into its sections.
+  ///
+  /// A section that came back empty is dropped rather than rendered as a blank
+  /// panel. All four missing means the model said nothing usable, and the
+  /// caller returns null — there is one call a week and it is not retried.
+  ///
+  /// Still reads the single `text` field a 1.0.x model reply used, so an older
+  /// stored response and an older schema both survive.
+  static WeeklyTale? narrative(Map<String, dynamic> json) {
+    const titles = {
+      'opening': TaleTitles.opening,
+      'the_table': TaleTitles.table,
+      'the_curses': TaleTitles.curses,
+      'the_boons': TaleTitles.boons,
+      'text': 'The account',
+    };
+
+    final sections = <TaleSection>[];
+    for (final entry in titles.entries) {
+      final body = (json[entry.key] as String?)?.trim();
+      if (body == null || body.isEmpty) continue;
+      sections.add(TaleSection(title: entry.value, body: body));
+    }
+
+    if (sections.isEmpty) return null;
+    return WeeklyTale(sections: sections, source: TaleSource.written);
   }
 
   // --- coercion helpers ---

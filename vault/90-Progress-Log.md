@@ -2723,3 +2723,55 @@ sections.
 
 **Verified:** `flutter analyze` clean, 996 tests green, `design_gallery.png`
 regenerated and inspected.
+
+## T40 — Give the account something to account for
+**Date:** 2026-09-16
+
+The weekly narrative has been writing about five numbers since T8. It now sees
+what was actually eaten. 996 → 1003 tests.
+
+**`NarrativeFacts` is still the guard, and widening it did not weaken it.**
+The null-check is on the `Reckoning`, not on anything new — and a
+`WeekPattern` contains no verdict, so nothing about the descriptive half can
+forge a revealed week. The existing test that walks all six sealed weekdays
+and asserts `from` returns null is unchanged and still green.
+
+**The pattern comes from the provider rather than being folded again.**
+`archivedWeekProvider` already had the week's rows in hand and could have
+computed it inline, but then The Tally and the account would each have their
+own idea of the same week. One source, one answer.
+
+**Four sections, and the absent fifth is deliberate.** `opening`, `the_table`,
+`the_curses`, `the_boons`. No `closing`: that is precisely where a model
+reaches for "next week, try…", which §7 forbids — and the app already supplies
+its own closing, which is the disclaimer. Four rather than more, because
+`_structured` records *every* attempt against the 50/day budget and each extra
+required string is another chance a free model trips `strict`. If they start
+failing in practice the note in `ai_schemas.dart` says to collapse to two
+rather than retry.
+
+**No migration, again.** The tale is `jsonEncode`d into the existing
+`weeks.narrative` column, and `WeeklyTale.decode` already reads a 1.0.x plain
+paragraph as a single section (T37). `AiDecode.narrative` also still reads the
+old single `text` field, so an older *model reply* survives as well as an
+older stored row.
+
+**The prompt is capped at every turn** — five curses, ten additive codes, three
+findings per tone — because a block that grows with the food library would
+send a prompt several times larger for a heavy week than a light one, for no
+extra insight. There is a test that logs 280 entries and asserts the prompt
+stays under forty lines.
+
+**The system prompt gained two rules that the new material requires.** It may
+describe food but never call it healthy or unhealthy and never advise a
+change; and it must use only the figures given, never naming an additive, a
+food or a day that is not in them. It is now handed real food names and real
+E-numbers, which is exactly the material a model embellishes if it is not told
+not to.
+
+**Still one call per week.** `WeekArchive.seal` early-returns on an existing
+row, still swallows `AiFailure` to null, still never retries. The
+`week_archive_test.dart` assertion that three seals produce one call is
+untouched and green.
+
+**Verified:** `flutter analyze` clean, 1003 tests green.

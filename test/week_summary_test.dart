@@ -5,6 +5,8 @@ import 'package:cal_tracker/domain/reveal_gate.dart';
 import 'package:cal_tracker/domain/week_summary.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/week_fixtures.dart';
+
 const _monday = Day(20260914);
 const _sunday = Day(20260920);
 
@@ -184,7 +186,13 @@ void main() {
 
         expect(sealed.isRevealed, isFalse);
         expect(
-          NarrativeFacts.from(sealed, averageVitality: 70, steps: 50000),
+          NarrativeFacts.from(
+            sealed,
+            averageVitality: 70,
+            steps: 50000,
+            pattern: fixturePattern(),
+            findings: const [],
+          ),
           isNull,
           reason: 'facts were built for a sealed week',
         );
@@ -195,7 +203,13 @@ void main() {
       final revealed = _reckoningOn(_sunday);
 
       final facts =
-          NarrativeFacts.from(revealed, averageVitality: 68, steps: 58000);
+          NarrativeFacts.from(
+        revealed,
+        averageVitality: 68,
+        steps: 58000,
+        pattern: fixturePattern(),
+        findings: const [],
+      );
 
       expect(facts, isNotNull);
       expect(facts!.loggedDays, 7);
@@ -209,6 +223,8 @@ void main() {
         _reckoningOn(_sunday, endWeight: 80.5),
         averageVitality: 68,
         steps: 58000,
+        pattern: fixturePattern(),
+        findings: const [],
       )!;
 
       expect(facts.weightDeltaKg, closeTo(-1.5, 0.0001));
@@ -231,7 +247,13 @@ void main() {
       );
 
       expect(
-        NarrativeFacts.from(lastWeek, averageVitality: 50, steps: 3000),
+        NarrativeFacts.from(
+          lastWeek,
+          averageVitality: 50,
+          steps: 3000,
+          pattern: fixturePattern(),
+          findings: const [],
+        ),
         isNotNull,
       );
     });

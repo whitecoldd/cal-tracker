@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../../domain/parsed_meal.dart';
 import '../../domain/portion.dart';
 import '../../domain/week_summary.dart';
+import '../../domain/weekly_tale.dart';
 import '../daos/ai_calls_dao.dart';
 import '../tables.dart';
 import 'ai_decode.dart';
@@ -269,7 +270,7 @@ class OpenRouterClient {
   /// Returns null if the model answered with nothing usable. The reveal screen
   /// simply shows no narrative rather than spending another call retrying: one
   /// per week is the whole budget for this.
-  Future<String?> weeklyNarrative(NarrativeFacts facts) async {
+  Future<WeeklyTale?> weeklyNarrative(NarrativeFacts facts) async {
     final json = await _structured(
       purpose: AiPurpose.weeklyNarrative,
       system: Prompts.narrativeSystem(),

@@ -15,10 +15,10 @@
 library;
 
 /// The semantic version, without the build number.
-const String appVersion = '1.0.6';
+const String appVersion = '1.0.7';
 
 /// The Android `versionCode`. Monotonic, one per released version.
-const int appBuild = 7;
+const int appBuild = 8;
 
 /// What `pubspec.yaml` says, in full.
 const String appVersionFull = '$appVersion+$appBuild';

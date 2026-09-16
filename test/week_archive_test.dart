@@ -10,11 +10,13 @@ import 'package:cal_tracker/domain/energy.dart';
 import 'package:cal_tracker/domain/reckoning.dart';
 import 'package:cal_tracker/domain/reveal_gate.dart';
 import 'package:cal_tracker/domain/week_summary.dart';
+import 'package:cal_tracker/domain/weekly_tale.dart';
 import 'package:dio/dio.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/fake_openrouter.dart';
+import 'support/week_fixtures.dart';
 
 const _monday = Day(20260914);
 const _sunday = Day(20260920);
@@ -93,6 +95,8 @@ void main() {
         reckoning,
         averageVitality: 68,
         steps: 58000,
+        pattern: fixturePattern(),
+        findings: const [],
       )!;
 
   group('sealing a week', () {
@@ -106,7 +110,10 @@ void main() {
         facts: factsFor(reckoning),
       );
 
-      expect(sealed!.narrative, 'The week was long.');
+      expect(
+        WeeklyTale.decode(sealed!.narrative)!.sections.single.body,
+        'The week was long.',
+      );
       expect(sealed.summary.energyBalanceKcal, -4200);
       expect(built.adapter.callCount, 1);
     });
@@ -217,7 +224,10 @@ void main() {
       final read = await second.archive.read(_monday);
 
       expect(read!.summary.energyBalanceKcal, -4200);
-      expect(read.narrative, 'The week was long.');
+      expect(
+        WeeklyTale.decode(read.narrative)!.sections.single.body,
+        'The week was long.',
+      );
       expect(second.adapter.callCount, 0);
     });
 
