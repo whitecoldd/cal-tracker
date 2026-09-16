@@ -2500,3 +2500,56 @@ weekly report will want a fourth.
 
 **Verified:** `flutter analyze` clean, 915 tests green, `bestiary_creature.png`
 regenerated. No plugin added, so no APK build.
+
+## T35 — Read the week without opening the seal
+**Date:** 2026-09-16
+
+The descriptive half of the weekly report, as pure Dart. No UI, no provider,
+nothing visible yet — `domain/week_pattern.dart` and its tests only.
+915 → 944 tests.
+
+**The seal is enforced by absence, not by a gate.** `WeekPattern` has no field
+for an energy balance, an expenditure, a weight, a trend or a projection, and
+the file imports neither `reckoning.dart`, `energy.dart` nor `sealed_value.
+dart`. A widget cannot render a verdict from this type because there is
+nowhere in it for one to be. That is strictly stronger than wrapping the
+values in `SealedValue` and trusting the screen, because a screen can be got
+wrong and a missing field cannot. A source-text test asserts the three
+forbidden imports stay absent — crude, but it is the only thing that stops the
+obvious future edit: *"just pass the DayEnergys in too, it's convenient."*
+
+**Every guideline in `HarmLimits` is a daily one, and that shaped the whole
+file.** A week's sodium measured against 2,000 mg reads as 700% severity, so a
+perfectly ordinary week would be reported as a catastrophe. Curses are
+therefore computed per day and then folded — `daysNotable`, `daysPastGuideline`,
+`peakSeverity`, `meanSeverity` over *logged* days — and the only week-wide
+`NutrientTotals` in the file is used for composition alone, with a comment
+saying so at both ends. There is a test that eats 1,500 mg of salt seven days
+running and asserts the week reports zero days past the guideline.
+
+**Attribution is by the portion, never per 100 g.** `readFoodToxins` scores a
+food at 100 g because a Bestiary entry is about what a thing *is*. A weekly
+report is about what the week *was*, so 1 kg of porridge must outrank 5 g of
+crisps on sodium even though the crisps are forty times saltier. Both
+directions are tested, and the second one is the regression that matters.
+
+**One definition changed under test.** "Clean days" first meant days with no
+*notable* curse, and the count came back zero for a week of porridge:
+`notableSeverity` is 0.05, a twentieth of the guideline, and a bowl of oats
+trips "thick blood" at 38% of the saturated-fat limit. Notability exists to
+keep trace readings off the Alchemy panel, not to define restraint. A clean
+day is now one that passed no guideline at all — which is both earnable and
+worth earning.
+
+**Axii, and why its weekly mean is not a double-count.** Its consistency term
+is `loggedDaysInWeek / 7`, which is identical on every day of a given week, so
+the mean varies only by the glycemic steadiness term. Coherent rather than
+wrong, and written down so nobody "fixes" it.
+
+**`MealSlot` stayed in `data/`.** Yrden needs how many meal slots a day used;
+the enum lives in `data/tables.dart`, and importing it would drag drift into
+`domain/` for a count. `DayMovement.mealSlotsUsed` is a plain `int` and the
+adapter will do the counting.
+
+**Verified:** `flutter analyze` clean, 944 tests green. No goldens touched —
+nothing renders yet.

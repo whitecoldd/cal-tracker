@@ -23,6 +23,15 @@ its line to it.
 
 ---
 
+## 1.0.2+3 — Read the week without opening the seal
+
+- `domain/week_pattern.dart`: the descriptive half of a week — curses folded
+  per day, distinct additives with the foods that listed them, composition,
+  fibre density, clean days, best and worst day, movement and Signs.
+- Nothing user-visible yet. The type deliberately has **no** field for an
+  energy balance, an expenditure or a weight, so the screens that will read it
+  cannot render a verdict from it.
+
 ## 1.0.1+2 — Name what the count hides
 
 - **Additives are named, not just counted.** A food's E-numbers were stored all
