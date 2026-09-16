@@ -68,12 +68,21 @@ costs at most one API call in its lifetime.
 
 ```bash
 flutter pub get
-flutter build apk --release --split-per-abi
+flutter build apk --release --target-platform android-arm64
+python tools/check_apk_libs.py
 ```
 
-The APKs land in `build/app/outputs/flutter-apk/`. Take the one that matches
-your phone — **`app-arm64-v8a-release.apk` for anything made in the last several
-years**; `armeabi-v7a` is for older 32-bit devices.
+The APK lands at `build/app/outputs/flutter-apk/app-release.apk`. **arm64 is the
+only target** — every phone made in the last several years is arm64, and this is
+a personal sideload rather than a Play Store upload, so there is nothing to gain
+from building the other two. Add `--split-per-abi` back if a 32-bit device ever
+needs one.
+
+**The second command is not optional.** SQLite arrives as a Dart code asset that
+is copied into the APK by a step nothing verifies; when that copy is skipped the
+build still succeeds and the app dies at its first query with "The Path is
+blocked". `check_apk_libs.py` opens the APK and is the only check that catches it
+before the phone does. See `CLAUDE.md` §3.
 
 Copy it across and open it. Android will ask you to allow installing from this
 source the first time.

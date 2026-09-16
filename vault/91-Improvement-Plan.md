@@ -10,8 +10,10 @@ tags: [plan, backlog]
 > the other two were single causes with wide blast radii. Six further issues
 > found while reading were closed along the way.
 >
-> **Still open, and now the top of the list:** the update-survival check, and the
-> four vault gaps listed at the foot of this note.
+> **Closed since:** the branch is merged to `main` (PR #1), and the
+> update-survival pass came back clean — see the Verification section.
+> **Still open:** the barcode check on a real label, and the four vault gaps
+> listed at the foot of this note, now scheduled in [[92-Mechanics-Plan]].
 
 Scheduled work after the first real-device shakedown of the T14 release build.
 One entry per issue; each task lands as its own commit with its own
@@ -312,3 +314,18 @@ Five things only a phone can answer, and they are the five that were reported:
 The update-survival check — install over the previous build, confirm the database
 and the backup mirror survive — is a separate pass, best run after T17, since
 that is the only task in this round that writes a table nothing wrote before.
+
+> [!success] Answered on the phone, 2026-09-16
+> **The update survives, and so does the backup.** Installed over the previous
+> build — including over the SQLite-less one from 09-15 — and the database came
+> through intact. The backup mirror was exercised as well and round-trips. That
+> closes both the update-survival pass and T13's device-only verification, the
+> two largest unknowns this note carried.
+>
+> Worth keeping: the broken build was recoverable by installing over it. A
+> missing native library is a *runtime* failure, so nothing on disk was harmed
+> and no data was lost — which is the reason to keep the debug signing key
+> stable more than any other.
+>
+> **Still unanswered: item 1.** The barcode fix has not met a real label yet.
+> Items 2–5 have not been reported back on individually.

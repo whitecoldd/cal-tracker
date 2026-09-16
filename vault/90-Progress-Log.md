@@ -1371,8 +1371,15 @@ regenerated and inspected.
 **One note on the toolchain, from doing this wrong.** Two `flutter test` runs
 overlapping collide on `build/native_assets/sqlite3.dll` and the second dies
 with the `PathExistsException` the rules warn about — the same wreckage as
-killing a run, reached from the other direction. `rm -rf build/native_assets`
-is still the fix. Do not start a second run while one is in flight.
+killing a run, reached from the other direction. Do not start a second run
+while one is in flight.
+
+> [!danger] This entry gave the wrong remedy, and T22 is what it cost
+> As written on 09-15 it said `rm -rf build/native_assets` was "still the fix".
+> It is not. Running it the next day took `android/jniLibs/` with it and shipped
+> a release APK with no SQLite in it — see T22 for why the build system then
+> never copied the libraries back. Delete **only** the half-copied file:
+> `rm -f build/native_assets/windows/sqlite3.dll`, per `../CLAUDE.md` §2.
 
 ---
 
@@ -1734,3 +1741,57 @@ dependency between them, so a `doFirst` assertion on `merge*JniLibFolders`
 could fire on an ordering that is merely unlucky rather than broken. A check
 that fails builds that would have worked is worse than one that runs a second
 after them. The APK itself is the honest thing to inspect.
+
+---
+
+## T23 — Correcting the record, and the next backlog
+**Date:** 2026-09-16
+
+No app code. Three things the repo was still telling a reader that were no
+longer true, and a plan for what is left.
+
+**The T17 entry was giving the instruction that broke the release build.** It
+closed with "`rm -rf build/native_assets` is still the fix" for the
+`PathExistsException` from overlapping test runs. T22 is the account of what
+that cost: run the next day, it took `android/jniLibs/` with it, the
+`install_code_assets` stamp stayed valid, and `app-release.apk` shipped with no
+SQLite in it. CLAUDE.md §2 was corrected in T22; **the log entry that taught the
+wrong habit was not**, and a log is read far more often than a rules file.
+
+It now carries a callout saying what it originally said and what it cost, rather
+than being quietly rewritten. The two later mentions of the same command in T22
+are history — they describe what was done on 09-15 — and stay exactly as they
+are. There is a difference between a record of a mistake and an instruction to
+repeat it, and only the second one needed fixing.
+
+**The install guide was still building three APKs.** arm64 is the only target
+for now: every phone made in the last several years is arm64, this is a
+sideloaded personal build rather than a Play Store upload, and nothing is
+gained by paying for `armeabi-v7a` and `x86_64` on every release. The README now
+says `--target-platform android-arm64`.
+
+And it now names `tools/check_apk_libs.py` as a required second command. T22
+added the script and put the rule in CLAUDE.md §3, but never touched the README
+— so the *install guide*, which is the document someone actually follows when
+putting this on a phone, still described the exact build sequence that shipped
+the broken APK. A check that only the agent's rules file knows about is a check
+that stops running the moment a human builds the release.
+
+**The device questions came back answered.** The update-survival pass and T13's
+backup round trip — the two largest unknowns [[91-Improvement-Plan]] carried —
+both came back clean on a real phone, including an install *over* the
+SQLite-less build. Nothing was lost. Worth keeping: a missing native library is
+a runtime failure, so it never touched the database on disk, which is a better
+argument for keeping the debug signing key stable than any of the ones in T14.
+Item 1, the barcode against a real label, is still open. The branch is merged to
+`main` as PR #1.
+
+**[[92-Mechanics-Plan]] is the new backlog**, and writing it found a fifth dead
+path: `withAdrenaline` has no callers either. Adrenaline is computed from the
+last week's logging, shown on The Path every day, and multiplies nothing — so
+the reward chain is disconnected at both joints, not one. That is worse than the
+mutagen gap it was found beside, because it is on a daily screen rather than a
+weekly one, and it is now folded into the same task.
+
+**Verified:** `flutter analyze` clean, 803 tests green — both unchanged, as they
+should be for a documentation commit.

@@ -19,7 +19,8 @@ all data on device.
 - [[04-Data-Model]] — drift tables and relationships
 - [[05-AI-Layer]] — OpenRouter, models, budget, prompts
 - [[90-Progress-Log]] — one entry per shipped task
-- [[91-Improvement-Plan]] — open issues and the tasks that close them
+- [[91-Improvement-Plan]] — the first-use feedback round, T16 to T22 (closed)
+- [[92-Mechanics-Plan]] — the current backlog: four mechanics built and never wired
 
 ## Where this lives
 
