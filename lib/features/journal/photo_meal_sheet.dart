@@ -83,20 +83,8 @@ class _PhotoMealSheetState extends ConsumerState<PhotoMealSheet> {
   PreparedPhoto? _prepared;
 
   Future<void> _pick(ImageSource source) async {
-    // The camera permission is requested by image_picker itself — there is no
-    // `permission_handler` in this project (CLAUDE.md §3).
-    final file = await ref.read(imagePickerProvider).pickImage(
-          source: source,
-          // A first pass at the camera layer, before the real compression.
-          // Cheaper than handing twelve megapixels to a platform channel.
-          maxWidth: 2048,
-          maxHeight: 2048,
-          imageQuality: 85,
-        );
-    if (file == null) return;
-
-    final bytes = await file.readAsBytes();
-    if (!mounted) return;
+    final bytes = await ref.read(photoPickerProvider)(source);
+    if (bytes == null || !mounted) return;
 
     setState(() {
       _preview = bytes;

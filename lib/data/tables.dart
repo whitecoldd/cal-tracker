@@ -42,7 +42,20 @@ enum ActivitySource { healthConnect, manual }
 
 /// What an AI call was for. Every call is attributed so the daily budget is
 /// explainable rather than just a number.
-enum AiPurpose { parseText, estimatePortion, parsePhoto, weeklyNarrative }
+/// What an AI call was spent on.
+///
+/// Stored by name, so a value may be added but never renamed or reordered
+/// without a migration — `ai_calls` holds the history the Settings budget is
+/// counted from.
+enum AiPurpose {
+  parseText,
+  estimatePortion,
+  parsePhoto,
+  weeklyNarrative,
+
+  /// Reading the nutrition table printed on a package. See CLAUDE.md §4.
+  readLabel,
+}
 
 /// The user. Single-row in practice, but a table keeps migrations uniform.
 class Profiles extends Table {

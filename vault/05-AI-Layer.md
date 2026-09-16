@@ -243,14 +243,35 @@ There is no background job in a serverless app, so a week closes when the user
 comes to read it. `WeekArchive.seal` is idempotent, which is what makes calling
 it on every open safe.
 
-## The four permitted uses
+## The five permitted uses
 
 1. **Free-text meal parsing** — "two eggs and a slice of rye" → structured items
 2. **Vague-portion estimation** — "a handful", "a plate of" → grams + confidence
 3. **Photo → items** — compressed image, vision model, confirm/edit before saving
 4. **Weekly narrative** — exactly one call, on reveal day
+5. **Label reading** — a photograph of a nutrition table → a filled-in form
 
-Adding a fifth use requires a deliberate decision about the budget.
+Adding a sixth use requires a deliberate decision about the budget.
+
+### Why the fifth was allowed (T31)
+
+Two products scanned off a Moldovan shelf came back with nothing: a barcode
+Open Food Facts had never held, and one it held as a country tag and no other
+field. Open Food Facts carries about 1,800 products tagged Moldova against
+France's million-plus, so this is the ordinary case here rather than the edge
+one, and the fallback was typing eight figures off small print.
+
+The budget argument is the write-back rule. A label is read once and the row is
+`FoodSource.manual`, which outranks everything — so no later scan, search or
+model call replaces it. The steady-state cost is one call per **new product in
+the user's life**, not one per log, and it falls to zero for a pantry that has
+stopped changing.
+
+What keeps it honest is that **nothing is saved by the reading**. It fills a
+form; the user presses INSCRIBE. The prompt is written for transcription rather
+than recall for the same reason — the dangerous failure is not a refusal but a
+plausible invention, a half-read panel completed from what that product usually
+contains, which produces a row nobody would think to doubt.
 
 ## Prompt constraints
 

@@ -85,6 +85,48 @@ Task: list the foods in a photograph of a meal.
         'The person who cooked and ate it adds: ${note.trim()}';
   }
 
+  /// System prompt for reading a nutrition table off a package.
+  ///
+  /// The task is **transcription**, and the prompt says so repeatedly, because
+  /// the failure that matters here is not a refusal but a plausible invention:
+  /// a model that half-reads a blurred panel and fills the rest from what that
+  /// product usually contains produces a row the user will never suspect. A
+  /// figure that is not printed is better returned as zero with a low
+  /// confidence, which the sheet shows as a field to check.
+  static String labelSystem() => '''
+$_house
+
+Task: transcribe the nutrition table printed on a food package.
+- Read the figures. Do not recall what this product usually contains, and do
+  not complete a column you cannot actually see.
+- If the table gives per-serving figures only, convert them to per 100 g
+  using the serving size printed on the pack, and lower the confidence.
+- If the table is in kJ only, convert to kcal by dividing by 4.184.
+- Salt is not sodium: if the pack states salt in grams, sodium in mg is that
+  figure times 400.
+- For any nutrient the pack does not state, give 0 and lower the confidence.
+- name: the product name as printed. brand: the brand as printed, or null.
+- If no nutrition table is legible, set readable to false and food to null.
+  Do not guess a panel from the front of the pack.''';
+
+  /// The instruction sent alongside the label photograph.
+  ///
+  /// The barcode is passed when there is one, and passed as *identification
+  /// only*. It deliberately does not ask the model what the barcode is — that
+  /// would invite exactly the recall this prompt spends its length forbidding.
+  static String labelUser({String? barcode}) {
+    final buffer = StringBuffer(
+      'Transcribe the nutrition table in this photograph.',
+    );
+    if (barcode != null && barcode.trim().isNotEmpty) {
+      buffer.write(
+        ' For your reference only, the pack scans as ${barcode.trim()}; '
+        'read the printed table regardless of what you know of that code.',
+      );
+    }
+    return buffer.toString();
+  }
+
   /// System prompt for estimating what a vague portion weighs.
   static String portionSystem() => '''
 $_house

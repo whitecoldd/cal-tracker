@@ -7,6 +7,7 @@ import 'package:cal_tracker/features/ai/ai_providers.dart';
 import 'package:cal_tracker/features/journal/food_lookup_providers.dart';
 import 'package:cal_tracker/features/journal/food_search_sheet.dart';
 import 'package:cal_tracker/features/journal/journal_providers.dart';
+import 'package:cal_tracker/features/journal/manual_food_sheet.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
 import 'package:drift/drift.dart' show Value;
@@ -475,12 +476,17 @@ void main() {
       await tester.pumpAndSettle();
 
       // The sheet is a ListView, so the button is not built until scrolled to.
+      //
+      // Anchored on the sheet rather than on a heading inside it: a heading
+      // scrolls out of the viewport and is unmounted part-way through, and the
+      // finder then resolves to nothing mid-scroll. The sheet is there for the
+      // whole journey however long the form grows.
       await tester.scrollUntilVisible(
         find.text('INSCRIBE'),
         200,
         scrollable: find
-            .ancestor(
-              of: find.text('PER 100 G OR 100 ML'),
+            .descendant(
+              of: find.byType(ManualFoodSheet),
               matching: find.byType(Scrollable),
             )
             .first,

@@ -123,6 +123,30 @@ abstract final class AiDecode {
     );
   }
 
+  /// Decodes a reading of a nutrition table.
+  ///
+  /// Returns null for every way the reading can be worthless — `readable`
+  /// false, a missing food, a nameless one — so the caller has one thing to
+  /// check rather than three. The call is spent either way; what matters is
+  /// that nothing half-read reaches the library.
+  static LabelReading? label(Map<String, dynamic> json) {
+    if (json['readable'] == false) return null;
+
+    final rawFood = json['food'];
+    if (rawFood is! Map) return null;
+
+    final food = _food(rawFood.cast<String, dynamic>());
+    if (food == null) return null;
+
+    return LabelReading(
+      food: food,
+      // A serving heavier than a kilogram is a misread decimal point, not a
+      // serving. Left null rather than clamped: the field is optional, and an
+      // invented one would be filled into a form as though it were printed.
+      servingG: _bounded(json['serving_g'], 0, 1000),
+    );
+  }
+
   /// Decodes a portion estimate.
   static PortionEstimate portion(Map<String, dynamic> json) {
     final note = (json['note'] as String?)?.trim();
@@ -170,6 +194,16 @@ abstract final class AiDecode {
     // A model that omits confidence is not confident.
     if (number == null || number.isNaN) return 0.5;
     return number.clamp(0.0, 1.0);
+  }
+
+  /// A number inside bounds, or null. Unlike [_clamp], an out-of-range value
+  /// is discarded rather than pulled to the edge — for an optional figure a
+  /// wrong answer is worse than no answer.
+  static double? _bounded(Object? value, double low, double high) {
+    final number = _number(value);
+    if (number == null || number.isNaN) return null;
+    if (number <= low || number > high) return null;
+    return number;
   }
 
   /// Accepts a number or a numeric string.

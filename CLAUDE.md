@@ -176,9 +176,13 @@ Non-negotiables:
 - All calls use `response_format: {type: "json_schema"}`. Never parse prose.
 - Log every call in `ai_calls`; Settings shows today's usage against the cap.
 - The app must stay fully usable with no key and no network.
-- AI is used for exactly four things: free-text meal parsing, vague-portion
-  estimation, photo→items, and one weekly narrative. Adding a fifth needs a
-  deliberate decision about the budget.
+- AI is used for exactly five things: free-text meal parsing, vague-portion
+  estimation, photo→items, one weekly narrative, and reading a nutrition table
+  off a photograph of a package. A sixth needs a deliberate decision about the
+  budget, as the fifth got in T31: Open Food Facts is thin outside western
+  Europe, so a barcode it has never held left the user typing eight figures off
+  small print. The write-back rule caps the cost at one call per new product
+  for the life of the install.
 
 ---
 

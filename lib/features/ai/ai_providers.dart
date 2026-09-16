@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -28,6 +30,38 @@ final mealPhotoStoreProvider = Provider<MealPhotoStore>(
 
 /// The camera and gallery. Overridden in tests, which have neither.
 final imagePickerProvider = Provider<ImagePicker>((ref) => ImagePicker());
+
+/// Takes a photograph, or picks one, and returns its bytes.
+///
+/// A function rather than the picker itself, for the same reason
+/// `barcodeScannerProvider` is one: [ImagePicker] reaches a platform channel
+/// that does not exist in a widget test, so every screen built on it was
+/// testable only down to the point where it asks for a picture — which is one
+/// line before everything worth testing. Injecting the whole step means a test
+/// can hand a screen a photograph.
+///
+/// [quality] is the first-pass compression the camera layer applies, before
+/// [ImagePrep] does the real work. A meal is read for what is on a plate and
+/// can afford 85; a nutrition table is read for small print, where JPEG
+/// artefacts land hardest on the thin strokes that separate a 3 from an 8.
+final photoPickerProvider =
+    Provider<Future<Uint8List?> Function(ImageSource, {int quality})>((ref) {
+  final picker = ref.watch(imagePickerProvider);
+
+  return (source, {int quality = 85}) async {
+    // The camera permission is requested by image_picker itself — there is no
+    // `permission_handler` in this project (CLAUDE.md §3).
+    final file = await picker.pickImage(
+      source: source,
+      // Cheaper than handing twelve megapixels to a platform channel.
+      maxWidth: 2048,
+      maxHeight: 2048,
+      imageQuality: quality,
+    );
+    if (file == null) return null;
+    return file.readAsBytes();
+  };
+});
 
 /// Shrinks a photograph and strips its metadata before it is sent.
 final imagePrepProvider = Provider<ImagePrep>((ref) => const ImagePrep());

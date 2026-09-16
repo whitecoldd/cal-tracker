@@ -2275,3 +2275,71 @@ personal location data and §6 keeps that out of this repo.
 
 **Verified:** `flutter analyze` clean, 868 tests green. No golden changed — the
 notice only exists after a scan, and no golden scans.
+
+---
+
+## T31 — Reading the packet
+**Date:** 2026-09-16
+
+T30 made a failed scan legible. This makes it recoverable: photograph the
+nutrition table and the manual form fills itself. 868 → 891 tests. The fifth
+permitted AI use, taken deliberately — see [[05-AI-Layer]] for the budget
+argument and CLAUDE.md §4 for the rule it changes.
+
+**The cost is bounded by the write-back, not by discipline.** A reading saves a
+`FoodSource.manual` row, which outranks every other source in
+`FoodsDao.upsert`, so nothing later replaces it. One call per new product for
+the life of the install, falling to zero for a pantry that stops changing. That
+is what made a fifth use arguable at fifty requests a day; a per-log cost would
+not have been.
+
+**The prompt is written against invention, not against refusal.** A model that
+declines to read a blurry panel costs a call and nothing else. A model that
+reads half of one and completes the rest from what that product usually
+contains produces a row the user will never think to doubt — and it is
+permanently authoritative. So `labelSystem` says *transcribe*, says *do not
+recall*, and gives `readable: false` as an explicit way out, and
+`AiDecode.label` believes it. `labelUser` passes the barcode as identification
+while telling the model to read the printed table regardless of what it knows
+of that code.
+
+**Nothing is saved by the reading.** It fills fields; the user presses
+INSCRIBE. The panel above the form says the figures came off a photograph and
+asks to have them checked, because a form that filled itself silently would be
+indistinguishable from one that was typed — and what is saved here outranks
+everything.
+
+**Three fields the form should always have had.** Sugars, saturates and sodium
+are on every EU nutrition table beside the four that were there, and all three
+feed Toxicity and Vitality. A food written by hand scored as though it
+contained none of any of them, which is not a missing figure but a wrong one.
+Folded into this task rather than split out: a label reader that transcribed a
+panel and then discarded half of it would be half a feature. NOVA and glycemic
+index have no field and are held in state — saved only when a reading produced
+them, so a hand-typed food still claims nothing it was not told.
+
+**`photoPickerProvider`, and why the picker moved behind a function.**
+[ImagePicker] reaches a platform channel that does not exist in a widget test,
+so both photo screens were testable only up to the line where they ask for a
+picture — which is one line before everything worth testing. Injecting the
+whole step is the same answer `barcodeScannerProvider` gave in T21, and it also
+removed the duplicate pick-then-read-bytes block from `PhotoMealSheet`. The
+quality argument rides along: a meal is read for what is on a plate and can
+afford 85, a nutrition table is read for small print, where JPEG artefacts land
+hardest on the thin strokes that separate a 3 from an 8.
+
+**Two test traps, both about ListViews.** `food_search_sheet_test`'s manual-entry
+test anchored `scrollUntilVisible` on a heading inside the sheet; the longer
+form scrolled that heading out of the viewport, it was unmounted mid-scroll,
+and the finder resolved to nothing. Anchored on `ManualFoodSheet` now, which is
+there for the whole journey. The new suite hit the same thing from the other
+side: the reader panel grows once it has filled the form, pushing the name
+field off-screen, so those tests run in a view tall enough to hold the form and
+stay about filling rather than about scrolling.
+
+**Not done here:** contributing a reading back to Open Food Facts. That empty
+Monster row from T30 is still empty, and filling it needs an account, opt-in and
+credentials in secure storage. It is the next task.
+
+**Verified:** `flutter analyze` clean, 891 tests green. No plugin was added, so
+no APK check was required under §3 — `image_picker` was already a dependency.

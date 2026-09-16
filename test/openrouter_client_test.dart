@@ -50,6 +50,26 @@ final _mealPayload = {
   'unrecognised': <String>[],
 };
 
+const _labelPayload = {
+  'readable': true,
+  'food': {
+    'name': 'Salted almonds',
+    'brand': 'Banzai',
+    'kcal': 607,
+    'protein_g': 21.2,
+    'carbs_g': 6.9,
+    'sugar_g': 4.4,
+    'fat_g': 52.5,
+    'sat_fat_g': 4.1,
+    'fibre_g': 12.5,
+    'sodium_mg': 380,
+    'nova_group': 3,
+    'glycemic_index': 15,
+    'confidence': 0.8,
+  },
+  'serving_g': 30,
+};
+
 const _portionPayload = {
   'grams': 30,
   'confidence': 0.7,
@@ -594,6 +614,110 @@ void main() {
       expect(calls.single.purpose, AiPurpose.estimatePortion);
       expect(calls.single.succeeded, isTrue);
       expect(calls.single.promptTokens, 300);
+    });
+  });
+
+  group('reading a label', () {
+    const dataUri = 'data:image/jpeg;base64,AAAA';
+
+    test('returns the panel the pack states', () async {
+      final built = build(replies: [FakeReply.ok(_reply(_labelPayload))]);
+
+      final reading = await built.client.readLabel(imageDataUri: dataUri);
+
+      expect(reading!.food.name, 'Salted almonds');
+      expect(reading.food.panel.kcal, 607);
+      expect(reading.servingG, 30);
+    });
+
+    test('sends the image and asks for the label schema', () async {
+      final built = build(replies: [FakeReply.ok(_reply(_labelPayload))]);
+
+      await built.client.readLabel(imageDataUri: dataUri);
+
+      final request = built.adapter.requests.single;
+      final messages = request['messages'] as List<dynamic>;
+      final parts = (messages.last as Map)['content'] as List<dynamic>;
+
+      expect((parts.last as Map)['image_url'], {'url': dataUri});
+
+      final format = request['response_format'] as Map<String, dynamic>;
+      expect(
+        (format['json_schema'] as Map<String, dynamic>)['name'],
+        'label_reading',
+      );
+    });
+
+    test('passes the barcode when the scan that failed gave one', () async {
+      final built = build(replies: [FakeReply.ok(_reply(_labelPayload))]);
+
+      await built.client.readLabel(
+        imageDataUri: dataUri,
+        barcode: '4840811001867',
+      );
+
+      final messages =
+          built.adapter.requests.single['messages'] as List<dynamic>;
+      final parts = (messages.last as Map)['content'] as List<dynamic>;
+
+      expect((parts.first as Map)['text'], contains('4840811001867'));
+    });
+
+    test('a panel it could not read is null, not an empty food', () async {
+      final built = build(
+        replies: [
+          FakeReply.ok(
+            _reply({'readable': false, 'food': null, 'serving_g': null}),
+          ),
+        ],
+      );
+
+      // The call is spent either way. What must not happen is a row of zeroes
+      // reaching the library under the name of a real product.
+      expect(await built.client.readLabel(imageDataUri: dataUri), isNull);
+    });
+
+    test('is attributed to its own purpose in the log', () async {
+      final built = build(replies: [FakeReply.ok(_reply(_labelPayload))]);
+
+      await built.client.readLabel(imageDataUri: dataUri);
+
+      // The fifth permitted use in CLAUDE.md §4, and countable as such: the
+      // budget in Settings is only explainable if each use is separable.
+      final calls = await db.aiCallsDao.select(db.aiCalls).get();
+      expect(calls.single.purpose, AiPurpose.readLabel);
+      expect(calls.single.succeeded, isTrue);
+    });
+
+    test('refuses without a key, before the image is sent anywhere', () async {
+      final built = build(replies: [], key: null);
+
+      await expectLater(
+        built.client.readLabel(imageDataUri: dataUri),
+        throwsA(isA<AiNoKey>()),
+      );
+      expect(built.adapter.callCount, 0);
+    });
+
+    test('carries no verdict data', () async {
+      final built = build(replies: [FakeReply.ok(_reply(_labelPayload))]);
+
+      await built.client.readLabel(
+        imageDataUri: dataUri,
+        barcode: '4840811001867',
+      );
+
+      // A packet knows nothing about the person holding it, and this request
+      // must not either. See CLAUDE.md §1.
+      //
+      // The same words the photo path is held to. Bare "weight" is not among
+      // them on purpose: it appears in the house preamble, in the clause that
+      // tells the model it is never told the user's — which is the blackout
+      // being stated, not broken.
+      final wire = jsonEncode(built.adapter.requests).toLowerCase();
+      for (final leak in const ['tdee', 'deficit', 'surplus', 'bmr']) {
+        expect(wire.contains(leak), isFalse, reason: 'leaked "$leak"');
+      }
     });
   });
 }

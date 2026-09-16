@@ -225,6 +225,40 @@ class OpenRouterClient {
     return AiDecode.meal(json);
   }
 
+  /// Reads the nutrition table off a photograph of a package.
+  ///
+  /// The fifth permitted use, added deliberately against the budget in
+  /// CLAUDE.md §4. The case for it: Open Food Facts is thin outside western
+  /// Europe, and a barcode it has never heard of used to leave the user typing
+  /// eight figures off small print by hand. One call turns a packet into a row
+  /// that is then **permanent** — the write-back rule means a product read this
+  /// way is never read again, so the steady-state cost is one call per new
+  /// product in the user's life rather than one per log.
+  ///
+  /// Returns null when nothing usable was read, including when the model says
+  /// the panel was not legible. The call is spent either way; a retry would
+  /// spend a second one on the same blurred photograph, so the sheet asks for
+  /// a better picture instead.
+  Future<LabelReading?> readLabel({
+    required String imageDataUri,
+    String? barcode,
+  }) async {
+    final json = await _structured(
+      purpose: AiPurpose.readLabel,
+      system: Prompts.labelSystem(),
+      user: [
+        {'type': 'text', 'text': Prompts.labelUser(barcode: barcode)},
+        {
+          'type': 'image_url',
+          'image_url': {'url': imageDataUri},
+        },
+      ],
+      schema: AiSchemas.label,
+    );
+
+    return AiDecode.label(json);
+  }
+
   /// Writes the single weekly account.
   ///
   /// The fourth and last permitted use, and the **only** call given verdict

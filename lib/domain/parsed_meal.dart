@@ -30,6 +30,25 @@ class ParsedFood {
   final double confidence;
 }
 
+/// What was read off the nutrition table printed on a package.
+///
+/// One food and nothing else — a packet carries one panel, so there is no list
+/// here and no portion. This is deliberately *not* a [ParsedItem]: a label
+/// reading is never logged directly. It fills a form the user then checks and
+/// saves, because the figures came off a photograph of small print and the
+/// person holding the packet is the one who can see whether they are right.
+class LabelReading {
+  const LabelReading({required this.food, this.servingG});
+
+  final ParsedFood food;
+
+  /// Grams in one serving, where the pack states one.
+  ///
+  /// Kept apart from the panel because it is a property of the packaging
+  /// rather than of the food, and it is the figure most often absent.
+  final double? servingG;
+}
+
 /// One item the model found in a meal.
 class ParsedItem {
   const ParsedItem({

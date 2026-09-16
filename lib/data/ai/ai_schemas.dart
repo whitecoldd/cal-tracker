@@ -123,6 +123,43 @@ abstract final class AiSchemas {
         },
       };
 
+  /// Reading the nutrition table off a package.
+  ///
+  /// One food, not a list: a packet carries one panel. [_food] is reused
+  /// wholesale so a figure read off a label is clamped by exactly the same
+  /// rules as one the model guessed at from a plate — the source differs, the
+  /// distrust does not.
+  ///
+  /// `readable` exists because "I photographed the wrong side of the packet" is
+  /// an ordinary outcome and has to be sayable. Without it the model's only way
+  /// to report failure would be to invent a panel, which is the one answer that
+  /// costs a call *and* poisons the library.
+  static Map<String, dynamic> get label => {
+        'name': 'label_reading',
+        'strict': true,
+        'schema': {
+          'type': 'object',
+          'additionalProperties': false,
+          'required': ['readable', 'food', 'serving_g'],
+          'properties': {
+            'readable': {
+              'type': 'boolean',
+              'description':
+                  'false if no nutrition table is legible in the image',
+            },
+            'food': {
+              ..._food,
+              'type': ['object', 'null'],
+            },
+            'serving_g': {
+              'type': ['number', 'null'],
+              'description':
+                  'grams in one stated serving, if the pack names one',
+            },
+          },
+        },
+      };
+
   /// The single weekly narrative.
   static Map<String, dynamic> get narrative => {
         'name': 'weekly_narrative',

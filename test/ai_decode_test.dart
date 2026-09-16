@@ -235,6 +235,73 @@ void main() {
     });
   });
 
+  group('label decoding', () {
+    Map<String, dynamic> reading({
+      Object? readable = true,
+      Object? food = const {
+        'name': 'Salted almonds',
+        'brand': 'Banzai',
+        'kcal': 607,
+        'protein_g': 21.2,
+        'carbs_g': 6.9,
+        'sugar_g': 4.4,
+        'fat_g': 52.5,
+        'sat_fat_g': 4.1,
+        'fibre_g': 12.5,
+        'sodium_mg': 380,
+        'nova_group': 3,
+        'glycemic_index': 15,
+        'confidence': 0.8,
+      },
+      Object? servingG = 30,
+    }) =>
+        {'readable': readable, 'food': food, 'serving_g': servingG};
+
+    test('reads the panel and the serving', () {
+      final result = AiDecode.label(reading())!;
+
+      expect(result.food.name, 'Salted almonds');
+      expect(result.food.brand, 'Banzai');
+      expect(result.food.panel.kcal, 607);
+      expect(result.food.panel.sodiumMg, 380);
+      expect(result.servingG, 30);
+    });
+
+    test('a panel the model could not see is nothing, not zeroes', () {
+      // The one answer that would cost a call *and* poison the library is an
+      // invented panel, so "not legible" has to be sayable and has to be
+      // believed when it is said.
+      expect(AiDecode.label(reading(readable: false)), isNull);
+      expect(AiDecode.label(reading(food: null)), isNull);
+    });
+
+    test('a nameless food is not a reading', () {
+      expect(
+        AiDecode.label(reading(food: {'name': '   ', 'kcal': 100})),
+        isNull,
+      );
+    });
+
+    test('is as distrustful of a label as of a plate', () {
+      // Same clamps, same helper. A figure read off small print gets no more
+      // credit than one guessed from a photograph of a dinner.
+      final result = AiDecode.label(
+        reading(food: {'name': 'Suet', 'kcal': 4000, 'sat_fat_g': -3}),
+      )!;
+
+      expect(result.food.panel.kcal, 900);
+      expect(result.food.panel.satFatG, 0);
+    });
+
+    test('an impossible serving is dropped rather than pulled to the edge', () {
+      // Unlike a nutrient, this one is optional: a wrong figure would be typed
+      // into a form as though the pack had stated it, and no figure is better.
+      expect(AiDecode.label(reading(servingG: 9000))?.servingG, isNull);
+      expect(AiDecode.label(reading(servingG: 0))?.servingG, isNull);
+      expect(AiDecode.label(reading(servingG: null))?.servingG, isNull);
+    });
+  });
+
   group('portion decoding', () {
     test('reads the estimate and its note', () {
       final estimate = AiDecode.portion({

@@ -20,9 +20,46 @@ List<String> _dailyPrompts() => [
       Prompts.photoSystem(),
       Prompts.photoUser(null),
       Prompts.photoUser('the sauce is tahini'),
+      Prompts.labelSystem(),
+      Prompts.labelUser(),
+      Prompts.labelUser(barcode: '4840811001867'),
     ];
 
 void main() {
+  group('reading a label', () {
+    test('is told to transcribe rather than to recall', () {
+      // The failure that matters here is not a refusal but a plausible
+      // invention: a model that half-reads a blurred panel and fills the rest
+      // in from what that product usually contains produces a row the user
+      // will never think to doubt.
+      final system = Prompts.labelSystem().toLowerCase();
+
+      expect(system, contains('transcribe'));
+      expect(system, contains('do not recall'));
+      expect(system, contains('readable to false'));
+    });
+
+    test('carries the house rules like every other prompt', () {
+      // The "never diagnose" clause lives in the shared preamble precisely so
+      // a fifth use cannot be added without it. This is the test that says so.
+      expect(Prompts.labelSystem(), contains('Never diagnose'));
+    });
+
+    test('passes a barcode as identification, never as a question', () {
+      final user = Prompts.labelUser(barcode: '4840811001867');
+
+      expect(user, contains('4840811001867'));
+      // Asking the model what the code is would invite exactly the recall the
+      // system prompt spends its length forbidding.
+      expect(user.toLowerCase(), contains('read the printed table'));
+    });
+
+    test('says nothing about a barcode when there is none', () {
+      expect(Prompts.labelUser(), isNot(contains('scans as')));
+      expect(Prompts.labelUser(barcode: '  '), isNot(contains('scans as')));
+    });
+  });
+
   group('the blackout reaches the prompts', () {
     test('no daily prompt contains verdict data', () {
       // A model cannot leak a figure it was never told. This is the cheapest
