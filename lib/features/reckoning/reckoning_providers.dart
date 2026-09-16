@@ -7,7 +7,9 @@ import '../../data/week_archive.dart';
 import '../../domain/day.dart';
 import '../../domain/energy.dart';
 import '../../domain/harm.dart';
+import '../../domain/mutagens.dart';
 import '../../domain/nutrition.dart';
+import '../../domain/progression.dart';
 import '../../domain/reckoning.dart';
 import '../../domain/reveal_gate.dart';
 import '../../domain/scoring.dart';
@@ -216,6 +218,24 @@ final archivedWeekProvider = FutureProvider<ArchivedWeek?>((ref) async {
     goalDays: goalDays,
   );
 
+  // --- what the week is actually paid ---
+  //
+  // Read straight from the DAO rather than through `activeMutagenBonusProvider`,
+  // which answers for *today*. A week is sealed when the user opens the screen,
+  // which can be days late and can be a week other than the current one, so the
+  // perk that applies is the one earned by the week before the week being
+  // sealed. Anything else would pay an old week at this week's rate.
+  final bonus = bonusOf(
+    await db.weeksDao.mutagensForWeek(reckoning.weekStart.addDays(-7)),
+  );
+
+  final awarded = withMultipliers(
+    xp.total,
+    loggedDaysInLastWeek: reckoning.loggedDays,
+    experienceBonus: bonus.experience,
+    ceilingBonus: bonus.adrenaline,
+  );
+
   final summary = WeekSummary(
     loggedDays: reckoning.loggedDays,
     energyBalanceKcal: reckoning.energyBalanceKcal.valueOrNull ?? 0,
@@ -226,7 +246,7 @@ final archivedWeekProvider = FutureProvider<ArchivedWeek?>((ref) async {
     averageToxicity: scoredDays == 0 ? 0 : toxicitySum / scoredDays,
     steps: steps,
     goalDays: goalDays,
-    xp: xp.total,
+    xp: awarded,
     weightDeltaKg: reckoning.weightDeltaKg.valueOrNull,
     trend: reckoning.trend.valueOrNull,
     bodyFatPercent: reckoning.bodyFatPercent.valueOrNull,

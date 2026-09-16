@@ -15,6 +15,7 @@ import '../activity/activity_providers.dart';
 import '../journal/journal_providers.dart';
 import '../journal/water_providers.dart';
 import '../reckoning/reckoning_providers.dart';
+import 'mutagen_providers.dart';
 
 /// Every XP the user has ever been awarded.
 ///
@@ -56,9 +57,20 @@ final recentLoggedDaysProvider = FutureProvider<int>((ref) async {
   return logged.length;
 });
 
+/// Adrenaline as The Path shows it.
+///
+/// Reads the active mutagen bonus so the figure on the character sheet is the
+/// one the seal will actually pay. Before T24 this was the unmodified curve and
+/// the award used neither — the sheet and the reward disagreed, and both were
+/// wrong.
 final adrenalineProvider = FutureProvider<double>((ref) async {
   final days = await ref.watch(recentLoggedDaysProvider.future);
-  return adrenalineFor(loggedDaysInLastWeek: days);
+  final bonus = await ref.watch(activeMutagenBonusProvider.future);
+
+  return adrenalineFor(
+    loggedDaysInLastWeek: days,
+    ceilingBonus: bonus.adrenaline,
+  );
 });
 
 /// The five Signs for the selected day.

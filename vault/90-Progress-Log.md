@@ -1795,3 +1795,95 @@ weekly one, and it is now folded into the same task.
 
 **Verified:** `flutter analyze` clean, 803 tests green — both unchanged, as they
 should be for a documentation commit.
+
+---
+
+## T24 — Perks that are actually spent
+**Date:** 2026-09-16
+
+Mutagens have been earned, stored and displayed since T12b and spent nowhere.
+Fixing that turned up a second, worse version of the same fault and a
+contradiction in the rules. 803 → 816 tests.
+
+**The reward chain was disconnected at both joints.** `MutagenBonus.applyToXp`
+had no callers, which was the known gap — and `withAdrenaline` had none either,
+which was not. Adrenaline is computed from the last seven days, drawn on The
+Path every single day as a ×1.43, and multiplied precisely nothing: `awardXp`
+was used raw at the seal. So the app had been quoting a daily reward it never
+paid, which is worse than the perk gap it was found beside, because a week's
+mutagen is seen once and Adrenaline is seen every time the character sheet
+opens.
+
+Three functions could award XP and none of them was called. That is not a
+coincidence — it is *why* nobody noticed. There is now exactly one,
+`withMultipliers`, and the other two are deleted.
+
+**The rules contradicted themselves, and the code and the UI were on opposite
+sides.** `mutagens.dart` says at the top that a mutagen "is earned at one reveal
+and modifies the *following* week". The panel on The Path said "Carried into the
+week ahead". And `earnedMutagensProvider` read `allAchievements()` and folded
+every perk ever unlocked into one set. Two documents describing a weekly perk,
+one implementation of a permanent upgrade.
+
+The perk reading won, for a reason that only shows up when you follow the other
+one forward: a bonus summed over all history climbs to the `maxStackedBonus` cap
+after about four good weeks and then never moves again. The mechanic would go
+silent exactly when the user had been most consistent — the worst possible
+moment for a reward to stop responding. And a perk that cannot be lost is not a
+perk, it is a difficulty setting.
+
+So `WeeksDao.mutagensForWeek(weekStart)` reads one week, and the providers split
+in two: `earnedMutagensProvider` is the trophy case The Path lists, and
+`activeMutagensProvider` is last week's, which is what the maths reads. The
+panel now lists everything earned and dims what is not in force, because a perk
+that was earned was still earned — hiding it would read as confiscation.
+
+> [!warning] The regression that would undo this silently
+> Sealing a fully logged week **grants Green Blood for that same week**. Under
+> the all-time reading the bonus would find the perk the seal had just written
+> and pay it immediately — a week rewarding itself. There is now a test that
+> seals, deletes the week row, seals again, and asserts the XP is identical.
+
+**Reading by week is also the only stable version.** `earnedBy` deliberately
+takes the *frozen* summary so re-running it on an archived week always gives the
+same answer. A bonus read from "whatever is in the table now" gives a different
+answer every week, so a re-seal would quietly re-price an old week. Same reason,
+one layer up. The seal reads the DAO directly rather than going through
+`activeMutagenBonusProvider`, because that provider answers for *today* and a
+week can be sealed days late.
+
+**One multiplication, one rounding.** Adrenaline and the experience bonus act on
+the same figure from different places, and applying them in two rounded steps
+loses up to half a point each time *and* makes the answer depend on which went
+first. A hundred XP at six days logged with a 20% perk is 171 rounded once and
+172 rounded twice. A point of XP is nothing; a reward that depends on the order
+of two multiplications is the kind of thing nobody can reason about a year
+later. Pinned by a test with those exact figures.
+
+**Where each effect landed.** `experience` at the seal. `adrenaline` raises the
+`maxAdrenaline` *ceiling* rather than the figure — so at zero days logged the
+multiplier is still 1.0 however many mutagens are in force, and a perk can never
+pay for a week that was not lived. `purge` scales `Toxicity.dailyRetention`,
+which meant turning three `const`-reading statics into functions that take a
+retention.
+
+**Alchemy reads the perk in force on the day it is showing, not today's.** The
+toxicity meter can page backwards, and using the current bonus there would
+rewrite what a past day looked like every time a new perk was earned. A day's
+carry-over should read the same in a month as it does now — the same instinct
+that makes `earnedBy` take a frozen summary.
+
+**The providers moved out of the Bestiary.** T12b put them beside the creature
+list because that task built both. Alchemy and the Reckoning both read them now,
+and neither should have to import a screen about food to compute toxicity. They
+live in `../lib/features/path/mutagen_providers.dart`.
+
+**§1 check.** Nothing here is a verdict value: every mutagen condition is
+behaviour rather than outcome (there is a test asserting none reads weight), and
+XP, Adrenaline and Toxicity are all on the always-visible side of the table. The
+bonus cannot carry the verdict onto a daily screen because it cannot see it.
+
+**Verified:** `flutter analyze` clean, 816 tests green, `path_sheet.png`
+regenerated and inspected — Green Blood gold and in force, White Honey dimmed,
+the footnote naming only the active effect. It was the one golden that changed,
+which is the check that nothing else moved.

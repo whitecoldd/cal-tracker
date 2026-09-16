@@ -4,6 +4,7 @@ import 'package:cal_tracker/data/database.dart';
 import 'package:cal_tracker/data/seed_loader.dart';
 import 'package:cal_tracker/data/tables.dart';
 import 'package:cal_tracker/domain/day.dart';
+import 'package:cal_tracker/domain/mutagens.dart';
 import 'package:cal_tracker/domain/portion.dart';
 import 'package:clock/clock.dart';
 // drift exports an `isNull` query expression that shadows the matcher.
@@ -641,6 +642,57 @@ void main() {
         ),
       );
       expect(await db.weeksDao.allAchievements(), hasLength(2));
+    });
+
+    test('mutagens come back for one week and not for every week', () async {
+      // The distinction the whole perk mechanic rests on. Reading the table
+      // wholesale gives a bonus that only ever grows; reading one week gives a
+      // bonus that has to be earned again.
+      const lastWeek = Day(20260907);
+
+      await db.weeksDao.unlock(
+        AchievementsCompanion.insert(
+          code: Mutagen.greenBlood.code,
+          weekStart: const Value(lastWeek),
+          unlockedAt: _now,
+        ),
+      );
+      await db.weeksDao.unlock(
+        AchievementsCompanion.insert(
+          code: Mutagen.whiteHoney.code,
+          weekStart: Value(weekStart),
+          unlockedAt: _now,
+        ),
+      );
+
+      expect(
+        await db.weeksDao.mutagensForWeek(lastWeek),
+        {Mutagen.greenBlood},
+      );
+      expect(
+        await db.weeksDao.mutagensForWeek(weekStart),
+        {Mutagen.whiteHoney},
+      );
+      expect(await db.weeksDao.allAchievements(), hasLength(2));
+    });
+
+    test('a week that earned nothing has no mutagens', () async {
+      expect(await db.weeksDao.mutagensForWeek(weekStart), isEmpty);
+    });
+
+    test('a code this build no longer knows is dropped, not surfaced', () async {
+      // A perk removed in a later version should disappear rather than haunt
+      // the sheet as a blank row or crash the bonus maths.
+      await db.weeksDao.unlock(
+        AchievementsCompanion.insert(
+          code: 'quicksilver_of_a_previous_build',
+          weekStart: Value(weekStart),
+          unlockedAt: _now,
+        ),
+      );
+
+      expect(await db.weeksDao.mutagensForWeek(weekStart), isEmpty);
+      expect(await db.weeksDao.allAchievements(), hasLength(1));
     });
   });
 }

@@ -142,14 +142,47 @@ int streakEndingAt(Day today, Set<Day> loggedDays, {int maxLookback = 400}) {
 ///
 /// So the streak is display and Adrenaline is reward, and the reward degrades
 /// one seventh at a time.
-double adrenalineFor({required int loggedDaysInLastWeek}) {
+///
+/// [ceilingBonus] raises the top of the scale, and is where the Blue Essence
+/// mutagen lands. It moves the *ceiling* rather than the figure itself, so a
+/// perk cannot pay anything to a week that was not logged: at zero days out of
+/// seven the multiplier is 1.0 however many mutagens are in force. A perk is a
+/// bigger reward for the same behaviour, never a reward for none.
+double adrenalineFor({
+  required int loggedDaysInLastWeek,
+  double ceilingBonus = 0,
+}) {
   final days = loggedDaysInLastWeek.clamp(0, 7);
-  return 1 + days / 7 * (maxAdrenaline - 1);
+  final ceiling = maxAdrenaline * (1 + ceilingBonus.clamp(0.0, 1.0));
+  return 1 + days / 7 * (ceiling - 1);
 }
 
-/// The most Adrenaline can multiply XP by, at seven days out of seven.
+/// The most Adrenaline can multiply XP by, at seven days out of seven and with
+/// no mutagen raising the ceiling.
 const double maxAdrenaline = 1.5;
 
-/// Applies Adrenaline to a week's XP.
-int withAdrenaline(int xp, {required int loggedDaysInLastWeek}) =>
-    (xp * adrenalineFor(loggedDaysInLastWeek: loggedDaysInLastWeek)).round();
+/// A week's XP after every multiplier, rounded once.
+///
+/// Two multipliers act on the same figure and they come from different places:
+/// Adrenaline pays for how much of *this* week was logged, and [experienceBonus]
+/// is a perk earned by the week before. Both are applied here rather than in
+/// two steps for an arithmetic reason — `(x * a).round() * b` rounds twice,
+/// loses up to half a point each time, and gives a different answer depending
+/// on which multiplier went first. One multiplication, one rounding, no order.
+///
+/// This is the **only** way XP should be awarded. It replaced a `withAdrenaline`
+/// and a `MutagenBonus.applyToXp` that between them had no callers at all: the
+/// reward chain was disconnected at both joints from T12b until T24, and having
+/// three functions that could each award XP is how that went unnoticed.
+int withMultipliers(
+  int xp, {
+  required int loggedDaysInLastWeek,
+  double experienceBonus = 0,
+  double ceilingBonus = 0,
+}) {
+  final adrenaline = adrenalineFor(
+    loggedDaysInLastWeek: loggedDaysInLastWeek,
+    ceilingBonus: ceilingBonus,
+  );
+  return (xp * adrenaline * (1 + experienceBonus.clamp(0.0, 1.0))).round();
+}

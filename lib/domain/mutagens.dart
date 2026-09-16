@@ -125,6 +125,12 @@ Set<Mutagen> earnedBy(WeekSummary summary) {
 }
 
 /// The combined effect of a set of mutagens.
+///
+/// Carries no arithmetic of its own on purpose. Each field is spent at the
+/// place that owns the figure it modifies — [experience] and [adrenaline] in
+/// `withMultipliers`, [purge] in `Toxicity.retentionWith` — so there is exactly
+/// one implementation of each rule. An earlier `applyToXp` here was a second
+/// one, it rounded separately from Adrenaline, and it had no callers.
 class MutagenBonus {
   const MutagenBonus({
     this.experience = 0,
@@ -144,9 +150,6 @@ class MutagenBonus {
   final double purge;
 
   bool get isEmpty => experience == 0 && adrenaline == 0 && purge == 0;
-
-  /// Applies the XP bonus to a week's award.
-  int applyToXp(int xp) => (xp * (1 + experience)).round();
 }
 
 /// Sums what a set of mutagens does.

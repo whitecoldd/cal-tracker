@@ -46,9 +46,10 @@ touching that line twice and regenerating `path_sheet.png` twice.
 
 ### T24 — Perks that are actually spent
 
-> [!important] This task needs a decision before code
-> Everything else here is wiring. This one is a rules change, and the rules
-> are currently contradictory — see "Which weeks count" below.
+> [!success] Shipped
+> The decision went to **the previous week only**. See [[90-Progress-Log]]
+> T24 for what it found, including the regression where a week that earns
+> Green Blood would have immediately paid itself with it.
 
 **What exists.** `MutagenBonus.applyToXp`
 ([mutagens.dart:149](../lib/domain/mutagens.dart#L149)), `withAdrenaline`,

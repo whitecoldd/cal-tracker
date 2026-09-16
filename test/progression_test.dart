@@ -154,8 +154,43 @@ void main() {
     });
 
     test('multiplies a week of XP', () {
-      expect(withAdrenaline(100, loggedDaysInLastWeek: 7), 150);
-      expect(withAdrenaline(100, loggedDaysInLastWeek: 0), 100);
+      expect(withMultipliers(100, loggedDaysInLastWeek: 7), 150);
+      expect(withMultipliers(100, loggedDaysInLastWeek: 0), 100);
+    });
+
+    test('a mutagen raises the ceiling, not the floor', () {
+      // The perk pays for a week that was logged. A week that was not logged
+      // earns nothing however many mutagens are in force — otherwise a good
+      // week would buy a free bad one.
+      expect(
+        adrenalineFor(loggedDaysInLastWeek: 0, ceilingBonus: 0.10),
+        1.0,
+      );
+      expect(
+        adrenalineFor(loggedDaysInLastWeek: 7, ceilingBonus: 0.10),
+        closeTo(maxAdrenaline * 1.10, 0.0001),
+      );
+    });
+
+    test('both multipliers are applied together and rounded once', () {
+      // A real divergence, not a decorative one. Six days logged is a ×1.4285…
+      // Adrenaline, and a 20% experience perk on top:
+      //
+      //   one rounding:  100 * 1.42857… * 1.2 = 171.428… -> 171
+      //   two roundings: (100 * 1.42857…).round() = 143, * 1.2 = 171.6 -> 172
+      //
+      // A point of XP either way is nothing; a reward that depends on the order
+      // two multipliers happened to be applied in is the kind of thing that
+      // cannot be reasoned about later. Pinned here so it stays one rounding.
+      expect(
+        withMultipliers(100, loggedDaysInLastWeek: 6, experienceBonus: 0.20),
+        171,
+      );
+
+      final twiceRounded =
+          ((100 * adrenalineFor(loggedDaysInLastWeek: 6)).round() * 1.20)
+              .round();
+      expect(twiceRounded, 172);
     });
   });
 

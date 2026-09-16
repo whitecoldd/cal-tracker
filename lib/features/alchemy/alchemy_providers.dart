@@ -8,6 +8,7 @@ import '../../domain/nutrition.dart';
 import '../../domain/scoring.dart';
 import '../../providers/app_providers.dart';
 import '../journal/journal_providers.dart';
+import '../path/mutagen_providers.dart';
 
 /// The day's nutrient rollup.
 final alchemyTotalsProvider = Provider<NutrientTotals>(
@@ -59,7 +60,14 @@ final toxicityProvider = FutureProvider<double>((ref) async {
       _loadOn(byDay[from.addDays(i)]),
   ];
 
-  return Toxicity.across(loads);
+  // The perk in force on *that* day, not today's: paging back to an old day
+  // should show the carry-over it actually had.
+  final bonus = await ref.watch(bonusOnDayProvider(day).future);
+
+  return Toxicity.across(
+    loads,
+    retention: Toxicity.retentionWith(bonus.purge),
+  );
 });
 
 double _loadOn(List<LoggedItem>? items) {

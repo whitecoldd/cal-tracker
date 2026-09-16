@@ -119,19 +119,36 @@ abstract final class Toxicity {
   /// week, or the meter would stop responding to what was actually eaten.
   static const double dailyRetention = 0.55;
 
+  /// Retention after a purge perk, which makes a bad day fade faster.
+  ///
+  /// [purge] is a fraction: 0.15 means 15% less of yesterday survives into
+  /// today, not 15% off the half-life. Stated as retention rather than as a
+  /// half-life because retention is the number the fold actually multiplies
+  /// by, and a perk that changed a derived figure would have to be inverted
+  /// somewhere to be used.
+  static double retentionWith(double purge) =>
+      dailyRetention * (1 - purge.clamp(0.0, 1.0));
+
   /// Toxicity after one more day, given yesterday's figure and today's load.
-  static double next(double previous, double todayLoad) =>
-      (previous * dailyRetention + todayLoad).clamp(0.0, 100.0);
+  static double next(
+    double previous,
+    double todayLoad, {
+    double retention = dailyRetention,
+  }) =>
+      (previous * retention + todayLoad).clamp(0.0, 100.0);
 
   /// Folds a run of daily loads, oldest first, into today's toxicity.
   ///
   /// Folding a bounded window rather than recursing back through all of
   /// history: the retention factor makes anything older than about a week
   /// contribute less than a percent, so [window] days is the whole of it.
-  static double across(Iterable<double> dailyLoads) {
+  static double across(
+    Iterable<double> dailyLoads, {
+    double retention = dailyRetention,
+  }) {
     var current = 0.0;
     for (final load in dailyLoads) {
-      current = next(current, load);
+      current = next(current, load, retention: retention);
     }
     return current;
   }
@@ -147,5 +164,6 @@ abstract final class Toxicity {
   ///
   /// Exposed so the screen can explain the carry-over rather than appearing to
   /// invent it.
-  static double residueAfter(int days) => math.pow(dailyRetention, days) as double;
+  static double residueAfter(int days, {double retention = dailyRetention}) =>
+      math.pow(retention, days) as double;
 }

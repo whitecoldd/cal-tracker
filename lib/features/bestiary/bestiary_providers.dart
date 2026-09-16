@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../data/nutrition_adapter.dart';
 import '../../domain/bestiary.dart';
-import '../../domain/mutagens.dart';
 import '../../providers/app_providers.dart';
 import '../journal/journal_providers.dart';
 
@@ -89,27 +88,3 @@ final bestiaryProgressProvider = Provider<BestiaryProgress>((ref) {
   final creatures = ref.watch(creaturesProvider).valueOrNull ?? const [];
   return progressOf(creatures);
 });
-
-/// Mutagens earned so far, newest first.
-///
-/// Read from `achievements`, which is written when a week seals. A code the
-/// app no longer recognises is dropped rather than shown as a blank — a perk
-/// removed in a later version should disappear, not haunt the sheet.
-final earnedMutagensProvider = FutureProvider<List<Mutagen>>((ref) async {
-  ref.watch(journalEntriesProvider);
-
-  final rows = await ref.watch(databaseProvider).weeksDao.allAchievements();
-
-  final seen = <Mutagen>{};
-  for (final row in rows) {
-    final mutagen = Mutagen.byCode(row.code);
-    if (mutagen != null) seen.add(mutagen);
-  }
-
-  return seen.toList();
-});
-
-/// What those mutagens are worth.
-final mutagenBonusProvider = FutureProvider<MutagenBonus>(
-  (ref) async => bonusOf(await ref.watch(earnedMutagensProvider.future)),
-);

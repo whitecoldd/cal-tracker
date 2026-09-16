@@ -2,7 +2,7 @@ import 'package:cal_tracker/domain/mutagens.dart';
 import 'package:cal_tracker/domain/progression.dart';
 import 'package:cal_tracker/domain/sealed_value.dart';
 import 'package:cal_tracker/domain/signs.dart';
-import 'package:cal_tracker/features/bestiary/bestiary_providers.dart';
+import 'package:cal_tracker/features/path/mutagen_providers.dart';
 import 'package:cal_tracker/features/path/path_providers.dart';
 import 'package:cal_tracker/features/path/path_screen.dart';
 import 'package:cal_tracker/theme/app_theme.dart';
@@ -21,6 +21,7 @@ void main() {
     int totalXp = 600,
     int streak = 12,
     int recentDays = 6,
+    List<Mutagen> active = const [Mutagen.greenBlood],
     SealedValue<double?> change = const Sealed<double?>(),
     int daysUntilReveal = 3,
     double? weight = 81.4,
@@ -53,9 +54,9 @@ void main() {
           earnedMutagensProvider.overrideWith(
             (ref) async => const [Mutagen.greenBlood, Mutagen.whiteHoney],
           ),
-          mutagenBonusProvider.overrideWith(
-            (ref) async =>
-                bonusOf(const [Mutagen.greenBlood, Mutagen.whiteHoney]),
+          activeMutagensProvider.overrideWith((ref) async => active),
+          activeMutagenBonusProvider.overrideWith(
+            (ref) async => bonusOf(active),
           ),
         ],
         child: MaterialApp(
@@ -185,6 +186,38 @@ void main() {
       // Zero would claim the weight held steady, which is a different claim
       // from "there was nothing to compare".
       expect(visibleText(tester), contains('—'));
+    });
+  });
+
+  group('mutagens', () {
+    testWidgets('lists everything earned but claims only what is in force',
+        (tester) async {
+      // The panel is overridden with two mutagens earned and one of them
+      // active. Both must appear — a perk that was earned was still earned —
+      // and the footnote must describe the active one only.
+      await pump(tester);
+
+      final text = visibleText(tester);
+      expect(text, contains('green blood'));
+      expect(text, contains('white honey'));
+
+      expect(text, contains('in force this week'));
+      expect(text, contains('experience'));
+      // White Honey is the purge perk and is not active, so its effect must
+      // not be claimed. Before T24 the bonus was the sum of everything ever
+      // earned and this line would have named it.
+      expect(text, isNot(contains('fades')));
+    });
+
+    testWidgets('says plainly when nothing is in force', (tester) async {
+      await pump(tester, active: const []);
+
+      final text = visibleText(tester);
+      // Still listed as earned...
+      expect(text, contains('green blood'));
+      // ...but the panel does not pretend it is doing anything.
+      expect(text, isNot(contains('in force this week:')));
+      expect(text, contains('none in force this week'));
     });
   });
 

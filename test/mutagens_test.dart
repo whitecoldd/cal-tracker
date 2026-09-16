@@ -112,14 +112,13 @@ void main() {
   group('the bonus they add up to', () {
     test('nothing earned is no bonus at all', () {
       expect(bonusOf(const []).isEmpty, isTrue);
-      expect(MutagenBonus.none.applyToXp(100), 100);
+      expect(MutagenBonus.none.experience, 0);
     });
 
     test('experience mutagens stack', () {
       final bonus = bonusOf([Mutagen.greenBlood, Mutagen.redVitriol]);
 
       expect(bonus.experience, closeTo(0.20, 0.0001));
-      expect(bonus.applyToXp(100), 120);
     });
 
     test('each effect accumulates on its own track', () {

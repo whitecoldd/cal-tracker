@@ -12,7 +12,7 @@ import '../../widgets/runic_divider.dart';
 import '../../widgets/sealed_node.dart';
 import '../../widgets/sign_glyph.dart';
 import '../../widgets/stat_bar.dart';
-import '../bestiary/bestiary_providers.dart';
+import 'mutagen_providers.dart';
 import 'path_providers.dart';
 
 /// The Path — the character sheet.
@@ -249,7 +249,8 @@ class _Mutagens extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final earned = ref.watch(earnedMutagensProvider).valueOrNull ?? const [];
-    final bonus = ref.watch(mutagenBonusProvider).valueOrNull;
+    final active = ref.watch(activeMutagensProvider).valueOrNull ?? const [];
+    final bonus = ref.watch(activeMutagenBonusProvider).valueOrNull;
 
     return OrnatePanel(
       title: 'Mutagens',
@@ -263,14 +264,20 @@ class _Mutagens extends ConsumerWidget {
               style: Type.lore(size: 12),
             )
           else ...[
-            for (final mutagen in earned) _MutagenRow(mutagen: mutagen),
-            if (bonus != null && !bonus.isEmpty) ...[
-              const RunicDivider(),
-              Text(
-                _bonusLine(bonus),
-                style: Type.lore(size: 11, color: Hue.parchmentFaint),
+            for (final mutagen in earned)
+              _MutagenRow(
+                mutagen: mutagen,
+                inForce: active.contains(mutagen),
               ),
-            ],
+            const RunicDivider(),
+            Text(
+              bonus == null || bonus.isEmpty
+                  ? 'None in force this week. A mutagen is granted at a reveal '
+                      'and lasts the week that follows it — so last week has to '
+                      'be earned again.'
+                  : _bonusLine(bonus),
+              style: Type.lore(size: 11, color: Hue.parchmentFaint),
+            ),
           ],
         ],
       ),
@@ -285,14 +292,21 @@ class _Mutagens extends ConsumerWidget {
         '+${(bonus.adrenaline * 100).round()}% adrenaline',
       if (bonus.purge > 0) 'toxicity fades ${(bonus.purge * 100).round()}% faster',
     ];
-    return 'Carried into the week ahead: ${parts.join(', ')}.';
+    return 'In force this week: ${parts.join(', ')}.';
   }
 }
 
+/// One earned mutagen.
+///
+/// [inForce] is the difference between a trophy and a modifier: the panel lists
+/// everything ever earned, and only last week's are actually paying. A spent
+/// perk is dimmed rather than hidden — it was still earned, and hiding it would
+/// make the collection look as though it had been taken away.
 class _MutagenRow extends StatelessWidget {
-  const _MutagenRow({required this.mutagen});
+  const _MutagenRow({required this.mutagen, required this.inForce});
 
   final Mutagen mutagen;
+  final bool inForce;
 
   @override
   Widget build(BuildContext context) {
@@ -301,7 +315,11 @@ class _MutagenRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.science_outlined, size: 14, color: Hue.toxicity),
+          Icon(
+            Icons.science_outlined,
+            size: 14,
+            color: inForce ? Hue.toxicity : Hue.steel,
+          ),
           const SizedBox(width: Space.sm),
           Expanded(
             child: Column(
@@ -309,7 +327,9 @@ class _MutagenRow extends StatelessWidget {
               children: [
                 Text(
                   mutagen.title.toUpperCase(),
-                  style: Type.label(color: Hue.gold),
+                  style: Type.label(
+                    color: inForce ? Hue.gold : Hue.parchmentDim,
+                  ),
                 ),
                 Text(mutagen.lore, style: Type.lore(size: 11)),
               ],

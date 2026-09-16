@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 
 import '../../domain/day.dart';
+import '../../domain/mutagens.dart';
 import '../database.dart';
 import '../tables.dart';
 
@@ -66,6 +67,27 @@ class WeeksDao extends DatabaseAccessor<AppDatabase> with _$WeeksDaoMixin {
       .watch();
 
   Future<List<Achievement>> allAchievements() => select(achievements).get();
+
+  /// The mutagens one week earned.
+  ///
+  /// Keyed by `weekStart` rather than read from the whole table, which is the
+  /// difference between a perk and a permanent upgrade: a bonus computed from
+  /// every achievement ever unlocked grows until it hits the stacking cap and
+  /// then never moves again. It is also the only version that is *stable* —
+  /// re-reading an old week has to give the answer it gave at the time, and
+  /// "everything in the table right now" gives a different one every week.
+  ///
+  /// A code this build no longer recognises is dropped rather than shown as a
+  /// blank, the same rule the trophy case uses.
+  Future<Set<Mutagen>> mutagensForWeek(Day weekStart) async {
+    final rows = await (select(achievements)
+          ..where((a) => a.weekStart.equals(weekStart.value)))
+        .get();
+
+    return {
+      for (final row in rows) ?Mutagen.byCode(row.code),
+    };
+  }
 
   /// Unlocks an achievement, ignoring a repeat award for the same week.
   Future<void> unlock(AchievementsCompanion achievement) async {

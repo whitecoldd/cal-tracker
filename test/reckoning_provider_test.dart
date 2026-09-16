@@ -1,10 +1,16 @@
+import 'package:cal_tracker/data/ai/ai_key_store.dart';
+import 'package:cal_tracker/data/ai/openrouter_client.dart';
 import 'package:cal_tracker/data/database.dart';
 import 'package:cal_tracker/data/tables.dart';
+import 'package:cal_tracker/data/week_archive.dart';
 import 'package:cal_tracker/domain/day.dart';
 import 'package:cal_tracker/domain/energy.dart';
+import 'package:cal_tracker/domain/mutagens.dart';
 import 'package:cal_tracker/domain/portion.dart';
+import 'package:cal_tracker/domain/progression.dart';
 import 'package:cal_tracker/domain/reckoning.dart';
 import 'package:cal_tracker/domain/sealed_value.dart';
+import 'package:cal_tracker/domain/week_summary.dart';
 import 'package:cal_tracker/features/journal/journal_providers.dart';
 import 'package:cal_tracker/features/reckoning/reckoning_providers.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
@@ -208,5 +214,110 @@ void main() {
         expect(reckoning.loggedDays, 7);
       },
     );
+  });
+
+  group('a sealed week is paid what its perks are worth', () {
+    /// Seals the week containing [today] and hands back its frozen summary.
+    ///
+    /// The archive is overridden with a **keyless** client. Sealing asks for a
+    /// narrative and `WeekArchive` swallows the resulting `AiFailure` on
+    /// purpose, so a week still seals with no key, no network and no budget —
+    /// which keeps this test on the arithmetic and off the wire entirely.
+    Future<WeekSummary> sealWeek(Day today) async {
+      final container = ProviderContainer(
+        overrides: [
+          databaseProvider.overrideWithValue(db),
+          weekArchiveProvider.overrideWithValue(
+            WeekArchive(
+              weeks: db.weeksDao,
+              ai: OpenRouterClient(
+                keys: InMemoryAiKeyStore(key: null),
+                calls: db.aiCallsDao,
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      return withClock(
+        Clock.fixed(today.toDateTime().add(const Duration(hours: 12))),
+        () async {
+          await container.read(profileProvider.future);
+          await container.read(journalEntriesProvider.future);
+          final archived = await container.read(archivedWeekProvider.future);
+          return archived!.summary;
+        },
+      );
+    }
+
+    /// Throws the sealed week away so the next read seals it again.
+    ///
+    /// The achievements it granted are left in place, which is the point: a
+    /// re-seal has to be able to see the perks without being paid by them.
+    Future<void> unseal() => db.customStatement('DELETE FROM weeks');
+
+    test('Adrenaline is applied — it was displayed and spent nowhere', () async {
+      await createProfile();
+      await logWeek();
+
+      final summary = await sealWeek(_sunday);
+
+      // Rebuilt from the frozen summary's own inputs, so this asserts the
+      // multiplier without hard-coding what a week of stew happens to score.
+      final base = awardXp(
+        loggedDays: summary.loggedDays,
+        averageVitality: summary.averageVitality,
+        goalDays: summary.goalDays,
+      ).total;
+
+      expect(base, greaterThan(0));
+      expect(
+        summary.xp,
+        withMultipliers(base, loggedDaysInLastWeek: summary.loggedDays),
+      );
+      // Seven days logged is the full ceiling, so the award is visibly larger
+      // than the sum of its parts. Before T24 these two were equal.
+      expect(summary.xp, greaterThan(base));
+    });
+
+    test("last week's perk pays this week", () async {
+      await createProfile();
+      await logWeek();
+
+      final plain = await sealWeek(_sunday);
+
+      await unseal();
+      await db.weeksDao.unlock(
+        AchievementsCompanion.insert(
+          code: Mutagen.greenBlood.code,
+          weekStart: Value(_monday.addDays(-7)),
+          unlockedAt: _now,
+        ),
+      );
+
+      final perked = await sealWeek(_sunday);
+
+      expect(perked.xp, greaterThan(plain.xp));
+    });
+
+    test('a perk the week earns itself does not pay that same week', () async {
+      // The regression an all-time bonus would reintroduce. Sealing a fully
+      // logged week grants Green Blood *for that week*; if the bonus were read
+      // from the whole achievements table, the second seal would find it and
+      // the perk would immediately pay for itself.
+      await createProfile();
+      await logWeek();
+
+      final first = await sealWeek(_sunday);
+      expect(
+        await db.weeksDao.mutagensForWeek(_monday),
+        contains(Mutagen.greenBlood),
+      );
+
+      await unseal();
+
+      expect((await sealWeek(_sunday)).xp, first.xp);
+    });
   });
 }

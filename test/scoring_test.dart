@@ -167,6 +167,38 @@ void main() {
       expect(Toxicity.residueAfter(Toxicity.window), lessThan(0.02));
     });
 
+    test('a purge perk makes a bad day fade faster', () {
+      // White Honey is 0.15: fifteen percent less of yesterday survives into
+      // today. Same load, same days, less left over.
+      const loads = [80.0, 0.0, 0.0];
+      final purged = Toxicity.retentionWith(0.15);
+
+      expect(purged, lessThan(Toxicity.dailyRetention));
+      expect(
+        Toxicity.across(loads, retention: purged),
+        lessThan(Toxicity.across(loads)),
+      );
+    });
+
+    test('no purge is exactly the unmodified decay', () {
+      // The default has to stay the default: a user with no mutagen must get
+      // the same number they got before perks were ever spent.
+      expect(Toxicity.retentionWith(0), Toxicity.dailyRetention);
+      expect(
+        Toxicity.across(const [40.0, 20.0], retention: Toxicity.retentionWith(0)),
+        Toxicity.across(const [40.0, 20.0]),
+      );
+    });
+
+    test("a purge cannot make today's own food weigh less", () {
+      // It softens the *carry-over*, not the meal. A single day with nothing
+      // before it reads the same however strong the perk is.
+      expect(
+        Toxicity.across(const [70.0], retention: Toxicity.retentionWith(0.9)),
+        Toxicity.across(const [70.0]),
+      );
+    });
+
     test('residue decays monotonically', () {
       var previous = 1.0;
       for (var day = 1; day <= Toxicity.window; day++) {
