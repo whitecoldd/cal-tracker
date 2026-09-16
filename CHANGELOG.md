@@ -23,6 +23,14 @@ its line to it.
 
 ---
 
+## 1.0.5+6 — The week, live
+
+- `weekPatternProvider` and `weekFindingsProvider`: the descriptive half read
+  straight from the journal, for any week, on any day — including weeks that
+  sealed long before this existed.
+- `TrackingDao.waterInRange`, and an adapter that carries the food's name and
+  day into the domain without `domain/` ever learning that drift exists.
+
 ## 1.0.4+5 — The tale the app can tell itself
 
 - `domain/weekly_tale.dart`: the week as prose, in titled sections. Written by

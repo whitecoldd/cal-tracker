@@ -1,11 +1,14 @@
 import 'dart:convert';
 
+import '../domain/day.dart';
 import '../domain/harm.dart';
 import '../domain/hydration.dart';
 import '../domain/nutrition.dart';
 import '../domain/portion.dart';
+import '../domain/week_pattern.dart';
 import 'daos/journal_dao.dart';
 import 'database.dart';
+import 'tables.dart';
 
 /// Adapts stored rows into the pure types the nutrition engine works on.
 ///
@@ -57,6 +60,40 @@ extension ServingRows on Iterable<LoggedItem> {
           alcoholG: i.serving.alcoholG,
         ),
       );
+}
+
+extension PortionRows on Iterable<LoggedItem> {
+  /// The same rows as [servings], but keeping which food and which day.
+  ///
+  /// [Serving] is deliberately anonymous — it is used by every screen and a
+  /// required name would break every fixture in the suite — so the weekly
+  /// report, which has to name the food that carried a curse, needs this
+  /// wider view. `domain/` still never learns that a `Food` row exists.
+  Iterable<LoggedPortion> get portions => map(
+        (i) => LoggedPortion(
+          day: i.entry.day,
+          food: FoodIdentity(
+            id: i.food.id,
+            name: i.food.name,
+            brand: i.food.brand,
+          ),
+          serving: i.serving,
+        ),
+      );
+
+  /// How many distinct meal slots were used, per day — the spread term Yrden
+  /// reads.
+  ///
+  /// Counted here rather than in `domain/` because `MealSlot` is a drift enum
+  /// in `data/tables.dart`, and importing it into the nutrition engine would
+  /// drag the database in for a number.
+  Map<Day, int> get mealSlotsByDay {
+    final slots = <Day, Set<MealSlot>>{};
+    for (final item in this) {
+      (slots[item.entry.day] ??= <MealSlot>{}).add(item.entry.mealSlot);
+    }
+    return {for (final entry in slots.entries) entry.key: entry.value.length};
+  }
 }
 
 /// Reads the additive tags out of the stored JSON array, as E-numbers.

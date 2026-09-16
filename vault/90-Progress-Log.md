@@ -2638,3 +2638,45 @@ Tale's pattern half is rendered mid-week, so its test strips the two density
 units and then asserts that neither `kcal` nor `kg` survives.
 
 **Verified:** `flutter analyze` clean, 978 tests green. No goldens.
+
+## T38 — The week, live
+**Date:** 2026-09-16
+
+`weekPatternProvider` wires the three pure files to the database. Still no UI.
+978 → 990 tests.
+
+**It watches neither of the providers you would expect it to.** Not
+`weekReckoningProvider`, because the open half must not be able to reach a type
+full of sealed values — the moment it can, something eventually reads one. It
+derives its own week boundaries from the gate instead. And not
+`archivedWeekProvider`, which returns null until the week closes and would
+make the whole report vanish six days out of seven, which is the exact gap
+this feature exists to close.
+
+**It recomputes from the journal every time, and that is a deliberate
+departure from "a sealed week is history".** The freeze in `WeekArchive`
+exists so a later change to the *scoring maths* cannot rewrite a verdict the
+user was already told, and so XP and mutagens cannot be re-awarded. A
+description of what was eaten is neither. Nothing in `WeekPattern` feeds
+`awardXp` or `earnedBy`, and the doc says that has to stay true — if it ever
+changes, this must be frozen with the rest.
+
+It is also the only way an old week shows anything at all. Every week sealed
+before today holds a `summary_json` that predates all of these fields and would
+decode to zeros forever. There is a test that shifts back three weeks and
+reads a full pattern out of a sealed one.
+
+**`MealSlot` stayed in `data/`, as T35 said it would.** `mealSlotsByDay` counts
+the distinct slots in the adapter and hands `domain/` an `int`.
+
+**One new query.** `waterFor(Day)` existed; `waterInRange` did not, and reading
+a week of water a day at a time would have been seven round trips for one
+panel.
+
+**The seal is now asserted at the provider, across all seven weekdays.** A
+frozen clock, a real database, a week of salt pork, and the concatenation of
+every finding and every Tale section checked for *kcal, kg, losing, gaining,
+deficit, surplus, expenditure, burned, tdee, projected, falling, rising* —
+after stripping the two density units, per the rule T36 established.
+
+**Verified:** `flutter analyze` clean, 990 tests green.

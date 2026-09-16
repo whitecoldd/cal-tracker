@@ -5,12 +5,16 @@ import 'package:cal_tracker/data/tables.dart';
 import 'package:cal_tracker/data/week_archive.dart';
 import 'package:cal_tracker/domain/day.dart';
 import 'package:cal_tracker/domain/energy.dart';
+import 'package:cal_tracker/domain/harm.dart';
 import 'package:cal_tracker/domain/mutagens.dart';
 import 'package:cal_tracker/domain/portion.dart';
 import 'package:cal_tracker/domain/progression.dart';
 import 'package:cal_tracker/domain/reckoning.dart';
 import 'package:cal_tracker/domain/sealed_value.dart';
+import 'package:cal_tracker/domain/week_findings.dart';
+import 'package:cal_tracker/domain/week_pattern.dart';
 import 'package:cal_tracker/domain/week_summary.dart';
+import 'package:cal_tracker/domain/weekly_tale.dart';
 import 'package:cal_tracker/features/journal/journal_providers.dart';
 import 'package:cal_tracker/features/reckoning/reckoning_providers.dart';
 import 'package:cal_tracker/providers/app_providers.dart';
@@ -75,6 +79,40 @@ void main() {
           quantity: gramsPerDay,
           unit: PortionUnit.grams,
           grams: gramsPerDay,
+          createdAt: _now,
+        ),
+      );
+    }
+  }
+
+  /// A week of one salty, additive-bearing food, for the harm surfaces.
+  Future<void> logSalt() async {
+    final food = await db.foodsDao.upsert(
+      FoodsCompanion.insert(
+        name: 'Salt pork',
+        searchKey: 'salt pork',
+        kcal: 400,
+        proteinG: const Value(15),
+        fatG: const Value(35),
+        satFatG: const Value(14),
+        sodiumMg: const Value(2000),
+        novaGroup: const Value(4),
+        additivesJson: const Value('["en:e250","en:e301","en:e330"]'),
+        source: FoodSource.openFoodFacts,
+        createdAt: _now,
+        updatedAt: _now,
+      ),
+    );
+
+    for (var i = 0; i < 7; i++) {
+      await db.journalDao.add(
+        EntriesCompanion.insert(
+          foodId: food,
+          day: _monday.addDays(i),
+          mealSlot: MealSlot.dinner,
+          quantity: 200,
+          unit: PortionUnit.grams,
+          grams: 200,
           createdAt: _now,
         ),
       );
@@ -320,4 +358,147 @@ void main() {
       expect((await sealWeek(_sunday)).xp, first.xp);
     });
   });
+
+  /// Reads the open half with the clock frozen to [today].
+  Future<WeekPattern> patternOn(Day today) async {
+    final container = ProviderContainer(
+      overrides: [databaseProvider.overrideWithValue(db)],
+    );
+    addTearDown(container.dispose);
+
+    return withClock(
+      Clock.fixed(today.toDateTime().add(const Duration(hours: 12))),
+      () async {
+        await container.read(profileProvider.future);
+        await container.read(journalEntriesProvider.future);
+        return container.read(weekPatternProvider.future);
+      },
+    );
+  }
+
+  group('the open half', () {
+    test('reads on an ordinary weekday, when the archive reads nothing',
+        () async {
+      // The whole point of the second provider. archivedWeekProvider returns
+      // null six days out of seven; this one must not.
+      await createProfile();
+      await logWeek();
+
+      final pattern = await patternOn(_monday.addDays(2));
+
+      expect(pattern.weekStart, _monday);
+      expect(pattern.isPartial, isTrue);
+      expect(pattern.daysInWindow, 3);
+      expect(pattern.loggedDays, 3, reason: 'only as far as today');
+    });
+
+    test('reads a whole week on the reveal day', () async {
+      await createProfile();
+      await logWeek();
+
+      final pattern = await patternOn(_sunday);
+
+      expect(pattern.isPartial, isFalse);
+      expect(pattern.loggedDays, 7);
+      expect(pattern.quality.meanVitality, greaterThan(0));
+    });
+
+    test('names the food behind a curse', () async {
+      await createProfile();
+      await logSalt();
+
+      final pattern = await patternOn(_sunday);
+      final salt = pattern[HarmKind.sodium];
+
+      expect(salt, isNotNull);
+      expect(salt!.carriers, isNotEmpty);
+      expect(salt.carriers.first.food.name, 'Salt pork');
+    });
+
+    test('counts each additive once however often the food was eaten',
+        () async {
+      await createProfile();
+      await logSalt();
+
+      final pattern = await patternOn(_sunday);
+
+      // One food, eaten seven times, listing three codes.
+      expect(pattern.additiveCount, 3);
+      expect(pattern.additives.first.days, 7);
+    });
+
+    test('still reads a week that was sealed long ago', () async {
+      // A sealed week's stored summary predates every figure here and would
+      // decode to zeros. Recomputing from the journal is what makes the report
+      // work backwards through the history.
+      await createProfile();
+      await logWeek();
+
+      final container = ProviderContainer(
+        overrides: [databaseProvider.overrideWithValue(db)],
+      );
+      addTearDown(container.dispose);
+
+      final pattern = await withClock(
+        Clock.fixed(_sunday.addDays(21).toDateTime()),
+        () async {
+          await container.read(profileProvider.future);
+          await container.read(journalEntriesProvider.future);
+          container.read(reckoningWeekProvider.notifier).shiftWeeks(-3);
+          return container.read(weekPatternProvider.future);
+        },
+      );
+
+      expect(pattern.weekStart, _monday);
+      expect(pattern.loggedDays, 7);
+    });
+  });
+
+  group('the seal holds across every weekday', () {
+    for (var offset = 0; offset < 7; offset++) {
+      final today = _monday.addDays(offset);
+
+      test('nothing readable on day ${offset + 1} states a direction',
+          () async {
+        await createProfile();
+        await logSalt();
+
+        final pattern = await patternOn(today);
+        final findings = readFindings(pattern);
+
+        final text = [
+          for (final f in findings) '${f.title} ${f.detail} ${f.basis ?? ''}',
+          for (final s in tellPattern(pattern, findings)) '${s.title} ${s.body}',
+        ].join(' ').toLowerCase();
+
+        // Density units are allowed; amounts are not. See
+        // week_findings_test.dart for why those are not the same thing.
+        final withoutUnits =
+            text.replaceAll(RegExp(r'per (\d[\d,]* )?(kcal|kg)'), '');
+
+        for (final leak in const [
+          'kcal',
+          'kg',
+          'losing',
+          'gaining',
+          'deficit',
+          'surplus',
+          'expenditure',
+          'burned',
+          'tdee',
+          'projected',
+          'falling',
+          'rising',
+        ]) {
+          expect(
+            withoutUnits.contains(leak),
+            isFalse,
+            reason: 'the open half leaked "$leak" on '
+                '${today.toDateTime().weekday}: $text',
+          );
+        }
+      });
+    }
+  });
+
 }

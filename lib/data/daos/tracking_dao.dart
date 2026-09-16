@@ -88,6 +88,17 @@ class TrackingDao extends DatabaseAccessor<AppDatabase>
       (select(waterLogs)..where((w) => w.day.equals(day.value)))
           .watchSingleOrNull();
 
+  /// Every water log in the range, oldest first.
+  ///
+  /// The weekly report needs a week of them at once; reading them a day at a
+  /// time would be seven round trips for one panel.
+  Future<List<WaterLog>> waterInRange(Day from, Day to) => (select(waterLogs)
+        ..where((w) =>
+            w.day.isBiggerOrEqualValue(from.value) &
+            w.day.isSmallerOrEqualValue(to.value))
+        ..orderBy([(w) => OrderingTerm(expression: w.day)]))
+      .get();
+
   Future<void> upsertWater(WaterLogsCompanion water) =>
       into(waterLogs).insertOnConflictUpdate(water);
 }

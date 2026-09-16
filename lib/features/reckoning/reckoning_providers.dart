@@ -13,6 +13,8 @@ import '../../domain/progression.dart';
 import '../../domain/reckoning.dart';
 import '../../domain/reveal_gate.dart';
 import '../../domain/scoring.dart';
+import '../../domain/week_findings.dart';
+import '../../domain/week_pattern.dart';
 import '../../domain/week_summary.dart';
 import '../../providers/app_providers.dart';
 import '../ai/ai_providers.dart';
@@ -177,6 +179,85 @@ final weekArchiveProvider = Provider<WeekArchive>(
 ///
 /// Sealing on open is the only sensible trigger: there is no background job in
 /// a serverless app, so a week closes when the user comes to read it. The
+/// The week's descriptive half — live, for any week, on any day.
+///
+/// Deliberately does **not** watch [weekReckoningProvider]: the open half must
+/// not be able to reach a type full of sealed values, because the moment it
+/// can, something will read one. It works out its own week boundaries from the
+/// gate instead.
+///
+/// It does not watch [archivedWeekProvider] either. That returns null until
+/// the week closes, which would make the whole report disappear six days out
+/// of seven — the exact gap this feature exists to close.
+///
+/// **It recomputes from the journal every time, including for weeks that were
+/// sealed long ago.** That is a deliberate departure from "a sealed week is
+/// history", and the reasoning matters: the freeze exists so that a later
+/// change to the *scoring maths* cannot rewrite a verdict the user was already
+/// told, and so XP and mutagens cannot be re-awarded. A description of what
+/// was eaten is neither of those. Nothing here feeds `awardXp` or `earnedBy`,
+/// and that has to stay true — if it ever changes, this must be frozen with
+/// the rest.
+///
+/// It is also the only way an old week shows anything at all: their stored
+/// `summary_json` predates every figure in [WeekPattern] and would decode to
+/// zeros forever.
+final weekPatternProvider = FutureProvider<WeekPattern>((ref) async {
+  final gate = ref.watch(revealGateProvider);
+  final week = ref.watch(reckoningWeekProvider);
+  final profile = ref.watch(profileProvider).valueOrNull;
+  final db = ref.watch(databaseProvider);
+
+  // Re-runs as food is logged, so a week in progress is live.
+  ref.watch(journalEntriesProvider);
+
+  final weekStart = week.startOfWeek(weekEndsOn: gate.weekEndsOn);
+  final weekEnd = week.endOfWeek(weekEndsOn: gate.weekEndsOn);
+
+  // A week that has not finished is read only as far as today. Reading to
+  // weekEnd would be harmless — there is nothing logged in the future — but
+  // `throughDay` is what tells the screen it is looking at a partial week.
+  final today = Day.from(clock.now());
+  final through = today.value < weekEnd.value ? today : weekEnd;
+
+  final items = await db.journalDao.forRange(weekStart, through);
+  final activity = await db.trackingDao.activityInRange(weekStart, through);
+  final water = await db.trackingDao.waterInRange(weekStart, through);
+  final weight = await db.trackingDao.latestWeightOnOrBefore(weekEnd);
+
+  final activityByDay = {for (final a in activity) a.day: a};
+  final waterByDay = {for (final w in water) w.day: w.ml};
+  final slotsByDay = items.mealSlotsByDay;
+
+  return readWeek(
+    weekStart: weekStart,
+    weekEnd: weekEnd,
+    throughDay: through,
+    portions: items.portions,
+    movement: [
+      for (final day in weekStart.weekDays(weekEndsOn: gate.weekEndsOn))
+        DayMovement(
+          day: day,
+          steps: activityByDay[day]?.steps ?? 0,
+          distanceM: activityByDay[day]?.distanceM ?? 0,
+          waterMl: waterByDay[day] ?? 0,
+          mealSlotsUsed: slotsByDay[day] ?? 0,
+        ),
+    ],
+    stepGoal: profile?.dailyStepGoal ?? 10000,
+    bodyMassKg: weight?.kg,
+  );
+});
+
+/// What the week tended towards, in both tones.
+///
+/// A plain [Provider] over the pattern rather than a second query: findings
+/// are a pure function of the pattern, and computing them twice would be two
+/// chances for the screen and the prompt to disagree about the same week.
+final weekFindingsProvider = Provider<AsyncValue<List<Finding>>>(
+  (ref) => ref.watch(weekPatternProvider).whenData(readFindings),
+);
+
 /// archive is idempotent, so opening the screen twice does not write twice or
 /// spend a second AI call.
 ///
