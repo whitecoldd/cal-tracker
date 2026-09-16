@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 
+import '../../domain/harm.dart';
 import '../../domain/nutrition.dart';
 import '../database.dart';
 import '../tables.dart';
@@ -100,7 +101,11 @@ class RemoteFood {
         alcoholG: alcoholG,
         glycemicIndex: glycemicIndex,
         novaGroup: novaGroup,
-        additiveCount: additives.length,
+        // Normalised and de-duplicated here for the same reason the stored
+        // adapter does it: a panel's additives are E-numbers, never raw tags.
+        additives: {for (final tag in additives) additiveCode(tag)}
+            .where((code) => code.isNotEmpty)
+            .toList(growable: false),
       );
 
   FoodsCompanion toCompanion({required DateTime now}) {

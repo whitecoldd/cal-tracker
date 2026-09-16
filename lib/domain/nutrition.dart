@@ -34,7 +34,7 @@ class FoodPanel {
     this.alcoholG = 0,
     this.glycemicIndex,
     this.novaGroup,
-    this.additiveCount = 0,
+    this.additives = const [],
   });
 
   final double kcal;
@@ -62,7 +62,19 @@ class FoodPanel {
   /// NOVA processing group, 1 (unprocessed) to 4 (ultra-processed).
   final int? novaGroup;
 
-  final int additiveCount;
+  /// Additive codes listed for this food, **normalised** — `E150d`, never the
+  /// `en:e150d` tag Open Food Facts stores.
+  ///
+  /// Normalisation happens once, in the adapters, so nothing downstream ever
+  /// has two spellings of one E-number to reconcile. See [additiveCode].
+  final List<String> additives;
+
+  /// How many additives this food lists.
+  ///
+  /// Derived rather than stored: a count and a list that can disagree
+  /// eventually do, and "7 additives listed" beside six names is exactly the
+  /// kind of quiet nonsense this type should make unwriteable.
+  int get additiveCount => additives.length;
 
   /// True when this food is ultra-processed.
   ///
@@ -131,7 +143,7 @@ class NutrientTotals {
     required this.itemCount,
     required this.ultraProcessedKcal,
     required this.wholeFoodKcal,
-    required this.additiveCount,
+    required this.additives,
     required this.carbKcalWithKnownGi,
   });
 
@@ -151,7 +163,7 @@ class NutrientTotals {
     var count = 0;
     var ultraKcal = 0.0;
     var wholeKcal = 0.0;
-    var additives = 0;
+    final additives = <String>{};
     var giCarbKcal = 0.0;
 
     for (final s in servings) {
@@ -167,7 +179,11 @@ class NutrientTotals {
       sodium += s.sodiumMg;
       alcohol += s.alcoholG;
       count++;
-      additives += s.food.additiveCount;
+      // A union, not a sum. The same food twice does not double its
+      // additives, and two foods that both list E330 have listed one additive
+      // between them — which is what `HarmLimits.additiveCount` has always
+      // claimed to measure.
+      additives.addAll(s.food.additives);
 
       if (s.food.isUltraProcessed) ultraKcal += s.kcal;
       if (s.food.isWholeFood) wholeKcal += s.kcal;
@@ -195,7 +211,7 @@ class NutrientTotals {
       itemCount: count,
       ultraProcessedKcal: ultraKcal,
       wholeFoodKcal: wholeKcal,
-      additiveCount: additives,
+      additives: additives,
       carbKcalWithKnownGi: giCarbKcal,
     );
   }
@@ -216,7 +232,7 @@ class NutrientTotals {
     itemCount: 0,
     ultraProcessedKcal: 0,
     wholeFoodKcal: 0,
-    additiveCount: 0,
+    additives: <String>{},
     carbKcalWithKnownGi: 0,
   );
 
@@ -245,7 +261,15 @@ class NutrientTotals {
   final double ultraProcessedKcal;
   final double wholeFoodKcal;
 
-  final int additiveCount;
+  /// The **distinct** additive codes across everything eaten.
+  ///
+  /// A set rather than a running total, which is what this was until T34: the
+  /// old sum counted a food's additives once per serving, so a day that
+  /// repeated one packaged food read as though it had eaten two.
+  final Set<String> additives;
+
+  /// Distinct additives across the day — the figure the guideline is about.
+  int get additiveCount => additives.length;
 
   /// Carbohydrate energy from the foods that actually carried a GI.
   ///

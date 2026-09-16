@@ -30,7 +30,7 @@ const _candy = FoodPanel(
   fibreG: 0,
   sodiumMg: 50,
   novaGroup: 4,
-  additiveCount: 5,
+  additives: ['E100', 'E101', 'E102', 'E104', 'E110'],
 );
 
 void main() {

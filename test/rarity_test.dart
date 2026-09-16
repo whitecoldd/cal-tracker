@@ -19,7 +19,7 @@ void main() {
         carbsG: 11,
         sugarG: 11,
         novaGroup: 4,
-        additiveCount: 6,
+        additives: ['E100', 'E101', 'E102', 'E104', 'E110', 'E120'],
       );
 
       expect(rankFood(lentils).index, greaterThan(rankFood(drink).index));

@@ -2443,3 +2443,60 @@ not a new primitive, so the design gallery has nothing to add.
 **Verified:** `flutter analyze` clean, 910 tests green. The settings goldens
 were regenerated for the added panel (`flutter test --update-goldens --tags
 golden`); no plugin was added, so no APK build was needed.
+
+## T34 — Name what the count hides
+**Date:** 2026-09-16
+
+First task of the weekly-report series (see the plan). The Alchemy screen has
+been reporting "Alchemical residue — 7 additives" since T6 and there has never
+been a way to learn which seven. The E-numbers were on disk the whole time.
+910 → 915 tests.
+
+**The data was never missing, only discarded.** `foods.additives_json` stores
+`["en:e150d","en:e338"]`, written from Open Food Facts since T5.
+`nutrition_adapter.dart` called `jsonDecode(...).length` and passed an `int`
+into `FoodPanel`, so by the time anything in `domain/` could see it there was
+nothing left but a number. No schema change was needed for any of this — only
+a wider pure type.
+
+**`additiveCount` is now derived, not stored.** `FoodPanel.additives` is the
+list; `additiveCount` is `additives.length`. Keeping both as fields was the
+obvious alternative and is the wrong one: two fields that must agree
+eventually disagree, and "7 additives listed" beside six names is exactly the
+class of quiet nonsense this change exists to remove. Every *consumer*
+compiled untouched because the getter kept its name; only the two producers
+changed.
+
+**The double-count, which is the real bug.** `NutrientTotals.of` did
+`additives += s.food.additiveCount` — a sum across servings — although
+`HarmLimits.additiveCount` has documented itself as "Distinct additives in a
+day" since T6. The same food logged twice counted its additives twice; two
+foods both listing E330 counted it twice. It is a `Set` union now.
+`test/nutrition_test.dart` asserted the old behaviour outright (`expect(totals.
+additiveCount, 12)` for one drink logged twice) — that test now asserts 6, and
+a second one covers two foods sharing a code.
+
+**What moved, and what deliberately did not.** Additives weigh 8 of the ~110
+point pool in `_load`, which halves the clamped severity, so the daily
+Toxicity figure falls by at most ~4 points and only on a day that repeats an
+additive-bearing food. **Already-sealed weeks are unaffected** — `WeekArchive.
+seal` early-returns on an existing row and `read` never recomputes, so history
+does not edit itself. `alchemy_day.png` did not move at all, which was worth
+checking rather than assuming: its fixture happens not to repeat such a food.
+
+**Normalisation happens once, at the boundary.** `additiveCode` turns
+`en:e330-citric-acid` into `E330` in `harm.dart`, and both adapters call it, so
+nothing downstream ever has two spellings of one additive to reconcile. A tag
+that is not an E-number comes back trimmed and otherwise untouched rather than
+dropped — the column is crowd-sourced, and discarding an unrecognised tag
+would under-report the one thing the user asked to see.
+
+**One layout fault found by the change.** `_Stat` on the creature sheet put
+its value in a fixed-width `Text`, which was fine for "45 kcal" and overflowed
+by 229 px on six additive codes. It now uses the same `Flexible` 4/5 split
+`_Weakness` twenty lines below it has always used — the duplication is worth
+noting, because that is now three copies of this row shape in the app and the
+weekly report will want a fourth.
+
+**Verified:** `flutter analyze` clean, 915 tests green, `bestiary_creature.png`
+regenerated. No plugin added, so no APK build.

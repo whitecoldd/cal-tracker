@@ -33,7 +33,7 @@ const _energyDrink = FoodPanel(
   addedSugarG: 11,
   sodiumMg: 100,
   novaGroup: 4,
-  additiveCount: 6,
+  additives: ['E100', 'E101', 'E102', 'E104', 'E110', 'E120'],
 );
 
 void main() {
@@ -190,13 +190,35 @@ void main() {
       );
     });
 
-    test('counts additives across the day', () {
+    test('counts each additive once, however often it was eaten', () {
+      // The same drink twice is not twelve additives. This asserted 12 until
+      // T34, which is what made the Toxicity meter read high on any day that
+      // repeated a packaged food.
       final totals = NutrientTotals.of(const [
         Serving(food: _energyDrink, grams: 100),
         Serving(food: _energyDrink, grams: 100),
       ]);
 
-      expect(totals.additiveCount, 12);
+      expect(totals.additiveCount, 6);
+      expect(totals.additives, hasLength(6));
+    });
+
+    test('an additive listed by two different foods counts once', () {
+      const other = FoodPanel(
+        kcal: 200,
+        novaGroup: 4,
+        // Shares E100 and E101 with the energy drink, and brings one of its
+        // own.
+        additives: ['E100', 'E101', 'E330'],
+      );
+
+      final totals = NutrientTotals.of(const [
+        Serving(food: _energyDrink, grams: 100),
+        Serving(food: other, grams: 100),
+      ]);
+
+      expect(totals.additiveCount, 7);
+      expect(totals.additives, contains('E330'));
     });
   });
 

@@ -2,6 +2,8 @@ import 'package:cal_tracker/domain/harm.dart';
 import 'package:cal_tracker/domain/nutrition.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/additive_codes.dart';
+
 /// Builds a day from a single 100 g panel, so each guideline can be pushed on
 /// in isolation.
 Toxins _day(FoodPanel panel, {double grams = 100}) =>
@@ -89,8 +91,12 @@ void main() {
     });
 
     test('additives are counted, and the count is worded for one', () {
-      const one = FoodPanel(kcal: 100, novaGroup: 4, additiveCount: 1);
-      const many = FoodPanel(kcal: 100, novaGroup: 4, additiveCount: 5);
+      const one = FoodPanel(kcal: 100, novaGroup: 4, additives: ['E100']);
+      const many = FoodPanel(
+        kcal: 100,
+        novaGroup: 4,
+        additives: ['E100', 'E101', 'E102', 'E104', 'E110'],
+      );
 
       expect(_day(one)[HarmKind.additives]!.detail, '1 additive listed');
       expect(_day(many)[HarmKind.additives]!.detail, '5 additives listed');
@@ -119,7 +125,7 @@ void main() {
     });
 
     test('a bad day scores high', () {
-      const bad = FoodPanel(
+      final bad = FoodPanel(
         kcal: 600,
         carbsG: 70,
         sugarG: 60,
@@ -130,7 +136,7 @@ void main() {
         sodiumMg: 2500,
         alcoholG: 20,
         novaGroup: 4,
-        additiveCount: 9,
+        additives: additiveCodes(9),
       );
 
       expect(_day(bad).load, greaterThan(70));
@@ -148,7 +154,7 @@ void main() {
     });
 
     test('never exceeds 100', () {
-      const everything = FoodPanel(
+      final everything = FoodPanel(
         kcal: 1000,
         carbsG: 200,
         addedSugarG: 200,
@@ -158,7 +164,7 @@ void main() {
         sodiumMg: 20000,
         alcoholG: 200,
         novaGroup: 4,
-        additiveCount: 40,
+        additives: additiveCodes(40),
       );
 
       expect(_day(everything).load, lessThanOrEqualTo(100));
@@ -208,7 +214,7 @@ void main() {
     });
 
     test('no reading is phrased as a diagnosis', () {
-      const bad = FoodPanel(
+      final bad = FoodPanel(
         kcal: 600,
         addedSugarG: 60,
         satFatG: 20,
@@ -216,7 +222,7 @@ void main() {
         sodiumMg: 4000,
         alcoholG: 30,
         novaGroup: 4,
-        additiveCount: 9,
+        additives: additiveCodes(9),
       );
 
       final surface = [
@@ -243,15 +249,42 @@ void main() {
     });
   });
 
+  group('additiveCode', () {
+    test('strips the Open Food Facts language prefix', () {
+      expect(additiveCode('en:e150d'), 'E150d');
+      expect(additiveCode('fr:e330'), 'E330');
+    });
+
+    test('takes the number and drops the name that follows it', () {
+      expect(additiveCode('en:e330-citric-acid'), 'E330');
+      expect(additiveCode('e150d-sulphite-ammonia-caramel'), 'E150d');
+    });
+
+    test('normalises case and spacing so one additive has one spelling', () {
+      expect(additiveCode('EN:E330'), 'E330');
+      expect(additiveCode('  e330  '), 'E330');
+      expect(additiveCode('e150D'), 'E150d');
+    });
+
+    test('hands back anything that is not an E-number, rather than dropping it',
+        () {
+      // The column is crowd-sourced. An unrecognised tag is still a fact about
+      // the food, and silently discarding it would under-report the one thing
+      // the user asked to be shown.
+      expect(additiveCode('en:carmine'), 'carmine');
+      expect(additiveCode(''), '');
+    });
+  });
+
   group('readFoodToxins', () {
     test('reads a single food per 100 g, independent of any portion', () {
-      const drink = FoodPanel(
+      final drink = FoodPanel(
         kcal: 45,
         carbsG: 11,
         addedSugarG: 11,
         sodiumMg: 100,
         novaGroup: 4,
-        additiveCount: 6,
+        additives: additiveCodes(6),
       );
 
       final food = readFoodToxins(drink);

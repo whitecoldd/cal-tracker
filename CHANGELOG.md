@@ -23,6 +23,17 @@ its line to it.
 
 ---
 
+## 1.0.1+2 — Name what the count hides
+
+- **Additives are named, not just counted.** A food's E-numbers were stored all
+  along and thrown away at the edge of the domain; a creature's entry now lists
+  them instead of reporting a bare "7 listed".
+- **Fixed: additives were double-counted.** The day's total summed each
+  serving's additives rather than taking the distinct set, so a day that
+  repeated one packaged food read as though it had eaten two — and Toxicity
+  read high accordingly. Already-sealed weeks are untouched: a sealed week is
+  never recomputed.
+
 ## 1.0.0+1 — First Contract
 
 *2026-09-16.* First stable release. Everything below shipped across T0–T32 and

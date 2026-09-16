@@ -41,7 +41,7 @@ void main() {
       fibreG: 12,
       sodiumMg: 420,
       novaGroup: 3,
-      additiveCount: 1,
+      additives: ['E322'],
     ),
     timesEaten: 4,
     firstSeen: const Day(20260901),

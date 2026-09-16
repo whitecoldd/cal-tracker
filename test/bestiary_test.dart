@@ -20,7 +20,7 @@ const _drink = FoodPanel(
   addedSugarG: 11,
   sodiumMg: 100,
   novaGroup: 4,
-  additiveCount: 6,
+  additives: ['E100', 'E101', 'E102', 'E104', 'E110', 'E120'],
 );
 
 const _chicken = FoodPanel(

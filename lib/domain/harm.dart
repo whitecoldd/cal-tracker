@@ -274,3 +274,25 @@ List<HarmFlag> _ordered(List<HarmFlag> flags) {
 /// it happened to be eaten once.
 Toxins readFoodToxins(FoodPanel food) =>
     readToxins(NutrientTotals.of([Serving(food: food, grams: 100)]));
+
+/// Turns an Open Food Facts additive tag into a plain E-number.
+///
+/// `en:e150d` → `E150d` · `e330` → `E330` · `en:e330-citric-acid` → `E330`
+///
+/// Anything that is not an E-number comes back trimmed and otherwise untouched.
+/// This column is crowd-sourced and carries the occasional oddity; an
+/// unrecognised tag is still a fact about the food, and dropping it would
+/// under-report the very thing the user asked to see.
+String additiveCode(String tag) {
+  // Strip the language prefix Open Food Facts puts on every taxonomy tag.
+  final colon = tag.lastIndexOf(':');
+  final bare = (colon == -1 ? tag : tag.substring(colon + 1)).trim();
+  if (bare.isEmpty) return '';
+
+  // `e330-citric-acid` — keep the number, drop the name that follows it.
+  final match = RegExp(r'^e(\d{3,4}[a-z]?)', caseSensitive: false)
+      .firstMatch(bare);
+  if (match == null) return bare;
+
+  return 'E${match.group(1)!.toLowerCase()}';
+}

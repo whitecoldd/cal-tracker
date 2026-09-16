@@ -179,7 +179,10 @@ class _Stats extends StatelessWidget {
           if (panel.additiveCount > 0)
             _Stat(
               label: 'Additives',
-              value: '${panel.additiveCount} listed',
+              // Named, not counted. A bare "7 listed" is the one reading in
+              // this app that a person cannot act on or look up, which is the
+              // whole complaint T34 answers.
+              value: panel.additives.join(' · '),
             ),
         ],
       ),
@@ -198,10 +201,24 @@ class _Stat extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: Space.xs),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: Text(label.toUpperCase(), style: Type.label())),
+          // Both sides shrink, for the reason `_Weakness` below already gives:
+          // a value can be as long as a list of additive codes, and a fixed
+          // side overflows the row on a narrow phone.
+          Flexible(
+            flex: 4,
+            child: Text(label.toUpperCase(), style: Type.label()),
+          ),
           const SizedBox(width: Space.sm),
-          Text(value, style: Type.prose(size: 13)),
+          Flexible(
+            flex: 5,
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              style: Type.prose(size: 13),
+            ),
+          ),
         ],
       ),
     );

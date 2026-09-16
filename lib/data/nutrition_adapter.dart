@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../domain/harm.dart';
 import '../domain/hydration.dart';
 import '../domain/nutrition.dart';
 import '../domain/portion.dart';
@@ -26,7 +27,7 @@ extension FoodPanelRow on Food {
         alcoholG: alcoholG,
         glycemicIndex: glycemicIndex,
         novaGroup: novaGroup,
-        additiveCount: _additiveCount(additivesJson),
+        additives: _additives(additivesJson),
       );
 }
 
@@ -58,17 +59,31 @@ extension ServingRows on Iterable<LoggedItem> {
       );
 }
 
-/// Counts additive tags in the stored JSON array.
+/// Reads the additive tags out of the stored JSON array, as E-numbers.
 ///
-/// Returns zero for anything unreadable rather than throwing. This column is
-/// written from Open Food Facts, whose data is crowd-sourced; a malformed value
-/// should cost one food its additive count, not bring down the Alchemy screen.
-int _additiveCount(String? json) {
-  if (json == null || json.isEmpty) return 0;
+/// Returns an empty list for anything unreadable rather than throwing. This
+/// column is written from Open Food Facts, whose data is crowd-sourced; a
+/// malformed value should cost one food its additive list, not bring down the
+/// Alchemy screen.
+///
+/// Normalising here rather than at the point of display is deliberate: it is
+/// the boundary where a stored tag becomes a domain value, and doing it once
+/// means nothing downstream has to know that `en:e150d` and `E150d` are the
+/// same additive.
+List<String> _additives(String? json) {
+  if (json == null || json.isEmpty) return const [];
   try {
     final decoded = jsonDecode(json);
-    return decoded is List ? decoded.length : 0;
+    if (decoded is! List) return const [];
+
+    final seen = <String>{};
+    for (final tag in decoded) {
+      if (tag is! String) continue;
+      final code = additiveCode(tag);
+      if (code.isNotEmpty) seen.add(code);
+    }
+    return List.unmodifiable(seen);
   } on FormatException {
-    return 0;
+    return const [];
   }
 }
