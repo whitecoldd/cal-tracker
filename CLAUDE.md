@@ -81,6 +81,8 @@ is wrong, however convenient.
   commit, not two — never commit code and leave the log entry for later.
 - Commit messages: `T<n>: <imperative summary>`, then a short body explaining
   *why*. End with the Co-Authored-By trailer.
+- **Every commit bumps the version** and adds its line to `CHANGELOG.md`, in
+  that same commit. See §9 for which number moves.
 - **No Open Food Facts credential is ever stored.** Its write endpoint
   authenticates with an account username *and password* sent on every call —
   there is no scoped token to revoke. So the app does not submit on the user's
@@ -278,3 +280,38 @@ never let the AI do so either — say it in the system prompt.
 - Prefer `final`, single quotes, trailing commas (the analyzer enforces all three).
 - Use `package:clock` for all "now" reads so tests can freeze time. Never call
   `DateTime.now()` directly outside of `clock.now()`.
+
+---
+
+## 9. Versioning
+
+`MAJOR.MINOR.PATCH+BUILD` in `pubspec.yaml`. **1.0.0+1 is the first stable
+release**, shipped 2026-09-16 as "First Contract"; everything before it was
+pre-release and has no version of its own.
+
+| Part | Moves when |
+|---|---|
+| PATCH | **every commit**, without exception |
+| MINOR | a large change: a new mechanic, screen or data source, a schema migration — anything that changes what the app is for a day |
+| MAJOR | a total makeover or remaster: the design language replaced, the seal reworked, the data model rebuilt. Not expected soon; documented so it is not improvised when it happens |
+| BUILD | +1 on every version change. Never reused, never decreasing — Play refuses a `versionCode` it has already accepted |
+
+Bumping a higher part resets the lower ones (`1.1.0`, then `1.1.1`). **BUILD
+never resets.**
+
+Three files carry the version and must agree:
+
+- `pubspec.yaml` — the source of truth; Gradle reads `versionName`/`versionCode`
+  straight from it
+- `lib/version.dart` — the constant the Settings screen prints. Mirrored by hand
+  rather than read with `package_info_plus`, for the reason §3 gives about
+  plugins
+- `CHANGELOG.md` — the newest `##` section must be the current version
+
+`test/version_test.dart` fails if they disagree, so a forgotten bump does not
+reach a commit. Nothing at runtime would notice otherwise: the APK would carry
+one number and display another.
+
+So the per-task sequence in §2 gains one step — bump the version and add the
+commit's line to the changelog's newest section, in the same commit as the code
+and the progress-log entry. A version bump is never its own commit.

@@ -8,6 +8,7 @@ import '../../data/health/activity_sync.dart';
 import '../../data/health/step_reader.dart';
 import '../../theme/tokens.dart';
 import '../../theme/typography.dart';
+import '../../version.dart';
 import '../../widgets/ornate_panel.dart';
 import '../../widgets/runic_divider.dart';
 import '../../widgets/stat_bar.dart';
@@ -129,6 +130,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         const _Health(),
         const SizedBox(height: Space.lg),
         const _Backup(),
+        const SizedBox(height: Space.lg),
+        const _Edition(),
       ],
     );
   }
@@ -587,6 +590,35 @@ class _Budget extends StatelessWidget {
           Text('$error', style: Type.lore(size: 12, color: Hue.bloodRed)),
         _ => const SizedBox(height: 40),
       },
+    );
+  }
+}
+
+/// Which version of the app this is.
+///
+/// Last panel on the last screen, because it is the thing a person looks for
+/// exactly once — when something is wrong and they need to say *which* app
+/// misbehaved. Read from [appVersion] rather than `package_info_plus`: the
+/// version is known at compile time, and CLAUDE.md §3 is a record of what a
+/// plugin added for a one-line answer costs.
+class _Edition extends StatelessWidget {
+  const _Edition();
+
+  @override
+  Widget build(BuildContext context) {
+    return OrnatePanel(
+      title: 'The edition',
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Text(appReleaseName, style: Type.lore(size: 13)),
+          Text(
+            appVersionFull,
+            style: Type.numeral(size: 15, color: Hue.parchmentDim),
+          ),
+        ],
+      ),
     );
   }
 }

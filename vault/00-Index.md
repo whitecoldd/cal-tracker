@@ -31,6 +31,8 @@ so a task's code and its [[90-Progress-Log]] entry ship in the same commit.
 
 - Repo: `C:\dev\cal-tracker` → `https://github.com/whitecoldd/cal-tracker`
 - Rules for the agent: `../CLAUDE.md` (one level up from this folder)
+- Releases and the versioning scheme: `../CHANGELOG.md` (the rule itself is
+  CLAUDE.md §9). Current: **1.0.0+1, "First Contract"** — the first stable.
 - Attachments: `attachments/`
 
 > [!warning] Wikilinks stop at the vault boundary

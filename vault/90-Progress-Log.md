@@ -2405,3 +2405,41 @@ so `flutter build apk --debug` was run and `python tools/check_apk_libs.py
 build/app/outputs/flutter-apk/app-debug.apk` passed — worth noting that the
 checker's default list is release APKs only, so a debug build must be passed by
 path or it silently checks stale artefacts instead.
+
+## T33 — A version to ship under
+**Date:** 2026-09-16
+
+The app had `version: 1.0.0+1` in `pubspec.yaml` since T0 and had never moved
+it, across thirty-three tasks and a release APK. That is not a version, it is a
+default. This declares **1.0.0+1 "First Contract"** as the first stable release
+and writes down the rule that keeps it moving. 905 → 910 tests.
+
+**The scheme is in CLAUDE.md §9, not in someone's memory.** PATCH on every
+commit, MINOR on a large change — a new mechanic, screen or data source, a
+schema migration — MAJOR on a remaster, which is not expected soon and is
+written down precisely because it will be improvised otherwise. BUILD rises by
+one on every version change and never resets: Play refuses a `versionCode` it
+has already accepted, and a reset after a MINOR bump would be exactly that
+mistake.
+
+**Three files carry the version, so a test holds them together.** `pubspec.yaml`
+is what Gradle reads. `lib/version.dart` is what Settings prints. `CHANGELOG.md`
+is what a person reads. Nothing at runtime notices when they disagree — the APK
+would carry one number and display another, which is the worst possible state
+for the one figure a bug report rests on. `test/version_test.dart` reads all
+three and fails on a mismatch, so a forgotten bump cannot reach a commit.
+
+**The constant is mirrored by hand rather than read with `package_info_plus`.**
+The version is known at compile time; a plugin for it would buy nothing and
+§3 is a standing record of what a plugin that resolves in pub and does not
+build on Android costs. The mirror is safe because the test enforces it — this
+is the same trade the project already makes for the storage and links channels.
+
+**"The edition" sits last on Settings**, being the thing a person looks for
+exactly once: when something is wrong and they need to say *which* app
+misbehaved. It falls below the golden's viewport, which is acceptable — it is
+not a new primitive, so the design gallery has nothing to add.
+
+**Verified:** `flutter analyze` clean, 910 tests green. The settings goldens
+were regenerated for the added panel (`flutter test --update-goldens --tags
+golden`); no plugin was added, so no APK build was needed.

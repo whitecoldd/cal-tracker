@@ -5,6 +5,9 @@ whether you are losing or gaining weight until the week is over.**
 
 Personal, serverless, offline-first. All data lives on the phone.
 
+**Version 1.0.0 — "First Contract", the first stable release.** Versioning
+scheme and release notes: [CHANGELOG.md](CHANGELOG.md).
+
 ---
 
 ## Why
@@ -149,7 +152,7 @@ read the Markdown on GitHub. [`00-Index`](vault/00-Index.md) is the way in;
 task, with the reasoning.
 
 ```bash
-flutter analyze && flutter test          # 706 tests
+flutter analyze && flutter test          # 910 tests
 flutter test --update-goldens --tags golden   # after a deliberate visual change
 ```
 
