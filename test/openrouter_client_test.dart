@@ -86,6 +86,8 @@ void main() {
     required List<FakeReply> replies,
     String? key = 'sk-or-v1-testtesttesttesttest',
     bool purchased = false,
+    Duration timeout = const Duration(seconds: 2),
+    Duration? chainTimeout,
   }) {
     final adapter = FakeOpenRouterAdapter(replies);
     final dio = Dio()..httpClientAdapter = adapter;
@@ -95,7 +97,8 @@ void main() {
         keys: InMemoryAiKeyStore(key: key, purchased: purchased),
         calls: db.aiCallsDao,
         dio: dio,
-        timeout: const Duration(seconds: 2),
+        timeout: timeout,
+        chainTimeout: chainTimeout,
       ),
       adapter: adapter,
     );
@@ -270,6 +273,74 @@ void main() {
 
       expect(built.adapter.modelsTried, OpenRouterClient.defaultModels);
     });
+
+    test('every model in it can be constrained to a schema', () {
+      // The rule the chain broke for four releases. `ling-3.0-flash-vl:free`
+      // sat second in this list and its only provider does not implement
+      // `response_format`, so every request routed to it came back HTTP 400,
+      // spent against the budget, and fell through. Nothing in the app can use
+      // a model that answers in prose — see CLAUDE.md §4 — so a model that
+      // cannot hold a schema does not belong in the chain at any position.
+      //
+      // This asserts the list, not the network: what stops the mistake
+      // recurring at runtime is `provider.require_parameters`, tested below.
+      expect(
+        OpenRouterClient.defaultModels,
+        isNot(contains('inclusionai/ling-3.0-flash-vl:free')),
+      );
+    });
+
+    test('stops walking the chain once the deadline is spent', () async {
+      // Three models at the full per-model timeout is four and a half minutes
+      // of a spinner in production. The deadline bounds the wait, not just the
+      // attempt: the third model is never started, because too little of it is
+      // left to be worth a request.
+      final built = build(
+        timeout: const Duration(milliseconds: 120),
+        chainTimeout: const Duration(milliseconds: 200),
+        replies: [
+          const FakeReply.slow(Duration(seconds: 5)),
+          const FakeReply.slow(Duration(seconds: 5)),
+          const FakeReply.slow(Duration(seconds: 5)),
+        ],
+      );
+
+      await expectLater(
+        built.client.parseMeal('two eggs'),
+        throwsA(isA<AiUnreachable>()),
+      );
+
+      expect(built.adapter.callCount, lessThan(3));
+    });
+
+    test('says a timeout in words the sheet can show', () async {
+      // Every sheet prints `AiFailure.message` verbatim, so this string is
+      // user-facing. It used to be the `toString` of a TimeoutException.
+      final built = build(
+        timeout: const Duration(milliseconds: 60),
+        chainTimeout: const Duration(milliseconds: 100),
+        replies: [
+          const FakeReply.slow(Duration(seconds: 5)),
+          const FakeReply.slow(Duration(seconds: 5)),
+          const FakeReply.slow(Duration(seconds: 5)),
+        ],
+      );
+
+      await expectLater(
+        built.client.parseMeal('two eggs'),
+        throwsA(
+          isA<AiUnreachable>().having(
+            (e) => e.message,
+            'message',
+            allOf(
+              contains('in time'),
+              isNot(contains('TimeoutException')),
+              isNot(contains('Future not completed')),
+            ),
+          ),
+        ),
+      );
+    });
   });
 
   /// Records [count] calls earlier today.
@@ -395,6 +466,40 @@ void main() {
       final schema = format['json_schema'] as Map<String, dynamic>;
       expect(schema['strict'], isTrue);
       expect(schema['name'], 'parsed_meal');
+    });
+
+    test('tells the model not to think about it', () async {
+      // The T42 fix, and the one that made the feature work at all. Every free
+      // model in the chain reasons by default, and on one five-food line the
+      // pro was cut off twice at two minutes with thinking on and answered in
+      // seventeen seconds with it off. The mini spent 8,573 tokens thinking
+      // and then returned four foods out of six.
+      //
+      // Nothing here is a problem to be solved: the schema already states the
+      // shape of the answer, so the deliberation buys nothing and costs the
+      // whole latency budget.
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
+      await built.client.parseMeal('two eggs');
+
+      final reasoning =
+          built.adapter.requests.single['reasoning'] as Map<String, dynamic>;
+
+      expect(reasoning['enabled'], isFalse);
+    });
+
+    test('refuses a provider that cannot hold the schema', () async {
+      // `require_parameters` moves the decision to OpenRouter's router, which
+      // knows which providers implement `response_format`. Without it a
+      // provider that does not simply rejects the request with a 400 naming
+      // itself, which is how a permanently unusable model stayed in the chain
+      // looking like a busy afternoon.
+      final built = build(replies: [FakeReply.ok(_reply(_mealPayload))]);
+      await built.client.parseMeal('two eggs');
+
+      final provider =
+          built.adapter.requests.single['provider'] as Map<String, dynamic>;
+
+      expect(provider['require_parameters'], isTrue);
     });
 
     test('carries the key as a bearer token', () async {

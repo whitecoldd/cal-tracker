@@ -236,6 +236,53 @@ void main() {
 
       expect(resolved.single.grams, greaterThan(0));
     });
+
+    test('a gram figure too small to be that portion is ignored', () async {
+      // Seen in a live call: "chicken shawarma wrap" came back as 1 piece
+      // weighing 1 gram — the quantity written into the grams field. One gram
+      // of wrap logs as four kilocalories, which is a wrong entry that looks
+      // like a right one. The unit table's own answer is used instead, which
+      // is what the app would have said with no model at all.
+      final resolved = await resolver.resolve(
+        ParsedMeal(
+          items: [
+            _item(
+              name: 'Chicken shawarma wrap',
+              quantity: 1,
+              unit: PortionUnit.piece,
+              grams: 1,
+            ),
+          ],
+        ),
+      );
+
+      final expected = resolvePortion(
+        quantity: 1,
+        unit: PortionUnit.piece,
+        gramsPerPiece: null,
+      );
+      expect(resolved.single.grams, expected.grams);
+    });
+
+    test('a teaspoon really can be three grams', () async {
+      // The floor must not overreach. Spoons of dense or light things are
+      // genuinely small, and clamping them to a default would be its own
+      // wrong entry.
+      final resolved = await resolver.resolve(
+        ParsedMeal(
+          items: [
+            _item(
+              name: 'Dried yeast',
+              quantity: 1,
+              unit: PortionUnit.teaspoon,
+              grams: 3,
+            ),
+          ],
+        ),
+      );
+
+      expect(resolved.single.grams, 3);
+    });
   });
 
   group('a whole meal', () {

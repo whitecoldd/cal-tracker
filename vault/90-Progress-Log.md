@@ -2846,3 +2846,123 @@ goldens: `reckoning_sealed`, `reckoning_revealed`, `reckoning_tale` and
 `reckoning_tale_sealed` — the last because it is the state nobody will look at
 on a device and the one most likely to read as broken rather than as
 deliberately locked. No plugin added, so no APK build.
+
+---
+
+## T42 — The meal parser had never worked
+**Date:** 2026-09-18
+**Version:** 1.1.1+10
+
+Reported as "I tried describing my full meal into the ai module, but it errors
+all the time." It was not the phrasing. Free-text parsing failed on almost
+every attempt, for three independent reasons, and the flow was wrong in two
+smaller places besides. 1020 → 1024 tests.
+
+**Everything here was measured against the live API**, one request at a time,
+with the app's own schema and prompts. None of it could have been found by
+reading the code, and none of it can be regression-tested without a key — so
+the numbers are written down here, and the behaviours they justify are pinned
+by tests against the fake.
+
+### 1. A model in the chain could never have answered
+
+`inclusionai/ling-3.0-flash-vl:free` sat second in `defaultModels` from T8.
+Its only provider is Novita, and `/api/v1/models/<id>/endpoints` does not list
+`response_format` among its supported parameters. Every call:
+
+```
+HTTP 400 — {"reason":"INVALID_REQUEST_BODY",
+            "message":"model features structured outputs not support"}
+```
+
+Recorded as a spent request, then fell through. For four releases. The app had
+no way to tell that apart from a busy afternoon, which is the real lesson: a
+permanent fault and a transient one looked identical from inside.
+
+Replaced with `nex-agi/nex-n2.5-mini:free`. A search of the whole free catalogue
+found only three models that are both vision-capable and schema-constrainable,
+and all three are now the chain — there is no fourth to fall back on.
+
+`provider: {require_parameters: true}` now goes on every request, which moves
+the decision to OpenRouter's router. A provider that cannot hold the schema is
+not routed to, rather than being routed to and then refusing.
+
+### 2. The models were thinking rather than answering
+
+The finding that actually fixed the feature. All three are reasoning models,
+and each spent thousands of tokens deliberating before writing JSON whose shape
+the schema had already fixed. One five-food line, same prompt, same schema:
+
+| Model | Thinking | Time | Foods found |
+|---|---|---|---|
+| pro | on | cut off at 120 s, twice | none |
+| pro | **off** | **17 s** | all six |
+| mini | on | 60 s, 8,573 thinking tokens | four of six |
+| mini | **off** | **4 s** | all six |
+| dots-3 | on | 93 s, 7,227 thinking tokens | all six |
+| dots-3 | **off** | **11 s** | all six |
+
+`reasoning: {enabled: false}` costs nothing in quality — the reasoning-off
+answers were the *more* complete ones. That is not a surprise. Nothing this app
+asks is a problem to be solved; it is extraction against a schema that already
+states the answer's shape. And thinking is billed as completion tokens, so a
+runaway trace can crowd the reply out of the context entirely, which is exactly
+how the mini returned four foods out of six after a minute of thought.
+
+**The chain order was not the problem and is unchanged.** The pro reads a line
+most accurately and, with thinking off, does it in seventeen seconds. It only
+looked like the wrong thing to lead with while it was also the slowest.
+
+### 3. The timeout was shorter than the models
+
+45 s per model, against models then taking 60–120 s. Nothing in the chain could
+finish inside it. Now 90 s per model, 180 s for the whole chain, with a model
+skipped rather than started once less than a quarter of an attempt is left.
+
+90 s looks absurd for a phone and is not. A working call is 4–17 s; the
+allowance is for congestion, which is real — the same request measured at 4 s
+once ran past two minutes on a busy afternoon, and one live verification line
+took 85 s. Cutting a call short throws away an answer that was on its way
+**and** spends the request, because OpenRouter bills the attempt, not the
+result.
+
+> [!note] The timeout must be wall-clock
+> OpenRouter pads a long non-streaming generation with whitespace to hold the
+> connection open. An idle-based timeout never fires against it — a probe using
+> one hung for over ten minutes on a request `curl --max-time` killed at 120 s.
+> `Future.timeout` is correct here and `receiveTimeout` would not be.
+
+### 4. The failure message was an exception's toString
+
+Every sheet prints `AiFailure.message` verbatim, so a user standing in a
+kitchen was shown `TimeoutException after 0:00:45.000000: Future not
+completed`. The two failures worth telling apart are *slow* and *refused* —
+one is worth trying again in a minute and the other is not — so
+`AiUnreachable` now switches on what the chain actually died of.
+
+### 5. Two things the live runs exposed that no test would have
+
+- **Nonsense units.** "a large coke" came back as *one slice*, a black coffee
+  as *one bowl*, honey as *one slice*. The grams were right, so the entry was
+  right and the journal still read like gibberish. The prompt now says the unit
+  must be one a person would use for that food, and to fall back to grams with
+  a figure when none fits. Re-measured after the change: coke → cup, butter →
+  tablespoon, honey → teaspoon, coffee → cup, olive oil → tablespoon.
+- **A one-gram wrap.** "chicken shawarma wrap" resolved to 1 piece weighing
+  1 gram — the quantity written into the grams field. Four kilocalories, logged
+  as though it were real. `MealResolver` now ignores a gram figure too small to
+  be the portion it claims and uses the unit table instead. The floor is per
+  unit and deliberately generous: a bowl or a piece is at least five grams, a
+  teaspoon only has to be above nothing, because a teaspoon of yeast really is
+  three grams.
+
+**Verified:** `flutter analyze` clean, 1024 tests green. Five live meal lines
+parsed end to end through the real client — plain, brand-named, vague
+("idk just a big bowl of cereal"), non-English ("борщ со сметаной и кусок
+хлеба") and hedged ("maybe half a plate of lasagna") — five calls, five
+answers, no failures. No plugin added, so no APK build.
+
+**The dev-machine `.env` was used for the live runs and nothing was committed
+from it.** The key is still entered in-app into secure storage; nothing in
+`lib/` reads `.env`, and the temporary probe that did was deleted. See
+CLAUDE.md §2.

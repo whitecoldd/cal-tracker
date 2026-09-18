@@ -168,7 +168,7 @@ class MealResolver {
     }
 
     final fromModel = item.grams;
-    if (fromModel != null && fromModel > 0) {
+    if (fromModel != null && fromModel >= _plausibleFor(item.unit)) {
       // The model committed to a figure and the device had nothing better.
       // Capped below the exact units' confidence: it is still a guess.
       return (
@@ -179,4 +179,35 @@ class MealResolver {
 
     return (grams: resolved.grams, confidence: resolved.confidence);
   }
+
+  /// The least a portion of one [unit] could weigh and still be that portion.
+  ///
+  /// A floor rather than a range, and a generous one: the point is not to
+  /// second-guess the model but to catch the single failure seen in practice,
+  /// which is a gram figure that is really the *quantity* wearing the wrong
+  /// field. "chicken shawarma wrap, 1 piece, grams: 1" came back from a live
+  /// call, and one gram of wrap logs as four kilocalories — a wrong entry that
+  /// looks like a right one, in a journal whose whole worth is that the user
+  /// trusts what they logged.
+  ///
+  /// Below the floor the unit's own default from `portion.dart` is used
+  /// instead, which is what the app would have said with no model at all. The
+  /// exact units never reach here: grams and millilitres are taken as given.
+  static double _plausibleFor(PortionUnit unit) => switch (unit) {
+        // Nothing a person calls a bowl, a plate or a piece weighs five grams.
+        PortionUnit.piece ||
+        PortionUnit.slice ||
+        PortionUnit.handful ||
+        PortionUnit.bowl ||
+        PortionUnit.plate =>
+          5,
+        // A spoon of something can be genuinely tiny — a teaspoon of yeast is
+        // about three grams — so these only have to be above nothing.
+        PortionUnit.cup ||
+        PortionUnit.tablespoon ||
+        PortionUnit.teaspoon ||
+        PortionUnit.grams ||
+        PortionUnit.millilitres =>
+          0.1,
+      };
 }

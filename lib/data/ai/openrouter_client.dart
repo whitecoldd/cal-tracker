@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:clock/clock.dart';
 import 'package:dio/dio.dart';
 
 import '../../domain/parsed_meal.dart';
@@ -80,26 +81,126 @@ class OpenRouterClient {
     required AiCallsDao calls,
     Dio? dio,
     List<String>? models,
-    Duration timeout = const Duration(seconds: 45),
+    Duration timeout = const Duration(seconds: 90),
+    Duration? chainTimeout,
   })  : _keys = keys,
         _calls = calls,
         _models = models ?? defaultModels,
         _dio = dio ?? Dio(),
-        _timeout = timeout;
+        _timeout = timeout,
+        _chainTimeout = chainTimeout ?? timeout * 2;
 
   final AiKeyStore _keys;
   final AiCallsDao _calls;
   final List<String> _models;
   final Dio _dio;
+
+  /// How long any one model is given.
+  ///
+  /// Ninety seconds, which is far more than a working call needs and is the
+  /// point. With [_noReasoning] the chain answers in four to seventeen
+  /// seconds; this is the allowance for the other case, which is real — the
+  /// models are free and shared, and the same request that took four seconds
+  /// once ran past two minutes on a busy afternoon. A timeout shorter than the
+  /// congestion throws away an answer that was on its way *and* spends the
+  /// request, because OpenRouter bills the attempt, not the result.
+  ///
+  /// It was 45 until T42, against models that were then thinking for sixty to
+  /// a hundred and twenty seconds before writing anything. Nothing in the
+  /// chain could finish inside it.
+  ///
+  /// A wall-clock timeout, not a socket one, and that distinction matters:
+  /// OpenRouter pads a long non-streaming generation with whitespace to hold
+  /// the connection open, so an idle-based timeout never fires at all.
   final Duration _timeout;
+
+  /// How long the whole chain is given, across every model it walks.
+  ///
+  /// Without it, three models at ninety seconds each is four and a half minutes
+  /// of a spinner before the sheet can say anything — the per-model timeout
+  /// bounds an attempt but not the wait. A model is skipped rather than started
+  /// once too little of the deadline is left to be worth spending, so the last
+  /// thing the user sees is a refusal rather than a token attempt.
+  final Duration _chainTimeout;
+
+  /// Below this much of the deadline left, there is no point starting another
+  /// model.
+  ///
+  /// A quarter of one attempt rather than a fixed number of seconds, so it
+  /// stays meaningful whatever [_timeout] is set to — including the
+  /// millisecond values the tests use, where a constant in seconds would
+  /// forbid the first attempt as well as the last.
+  Duration get _shortestWorthwhileAttempt => _timeout ~/ 4;
 
   /// The fallback chain, best first. All three take images and structured
   /// output, so T9's photo parsing can use the same order.
+  ///
+  /// The order is unchanged from T8 and is correct — the pro reads a line most
+  /// accurately, and with [_noReasoning] it does so in about seventeen seconds.
+  /// It only *looked* wrong while reasoning was on, when it was also the
+  /// slowest thing in the list.
+  ///
+  /// `inclusionai/ling-3.0-flash-vl:free` used to sit second and **could never
+  /// have worked**. Its only provider does not implement `response_format` —
+  /// `/models/…/endpoints` does not list the parameter — so every call returned
+  /// HTTP 400 `model features structured outputs not support`, spent a request
+  /// against the budget, and fell through to the next model. It is replaced
+  /// here by `nex-n2.5-mini`, which is the same family as the pro and the only
+  /// other free model that is both vision-capable and schema-constrainable.
+  ///
+  /// It was replaced rather than repaired: the app parses no prose, so a model
+  /// that cannot be held to a schema has nothing to offer it at any position.
+  /// [_requireParameters] is what stops the same mistake recurring silently.
   static const List<String> defaultModels = [
     'nex-agi/nex-n2.5-pro:free',
-    'inclusionai/ling-3.0-flash-vl:free',
+    'nex-agi/nex-n2.5-mini:free',
     'dots-studio/dots-3-note-preview:free',
   ];
+
+  /// Routing instruction: refuse a provider that cannot honour the request.
+  ///
+  /// OpenRouter routes a model to whichever provider is serving it, and a
+  /// provider that does not implement `response_format` does not ignore the
+  /// field — it rejects the whole request with a 400 that names the provider
+  /// rather than the app. `require_parameters` moves that decision to the
+  /// router, which knows which providers support what: a provider that cannot
+  /// hold the schema is simply not routed to.
+  ///
+  /// This is the guard the chain lacked. A model was carried in
+  /// [defaultModels] for four releases that no provider could ever have
+  /// answered, and the app could not tell that apart from a busy afternoon.
+  static const Map<String, dynamic> _requireParameters = {
+    'require_parameters': true,
+  };
+
+  /// Do not think about it. Transcribe it.
+  ///
+  /// Every free model in [defaultModels] is a reasoning model, and left to
+  /// itself each one spends thousands of tokens deliberating before it writes
+  /// the JSON it was going to write anyway. Measured on one five-food line:
+  ///
+  /// | model | thinking | time | foods found |
+  /// |---|---|---|---|
+  /// | pro | on | cut off at 120 s, twice | none |
+  /// | pro | **off** | **17 s** | all six |
+  /// | mini | on | 60 s, 8,573 thinking tokens | four of six |
+  /// | mini | **off** | **4 s** | all six |
+  /// | dots-3 | on | 93 s, 7,227 thinking tokens | all six |
+  /// | dots-3 | **off** | **11 s** | all six |
+  ///
+  /// So this one field is the difference between the feature working and the
+  /// feature timing out, and it costs nothing in quality — the reasoning-off
+  /// answers were the *more* complete ones. That is not surprising: every call
+  /// this client makes is schema-constrained extraction, not a problem to be
+  /// solved. The schema already says what the answer must look like, and a
+  /// model that has thought for eight thousand tokens still has to fill in the
+  /// same fields.
+  ///
+  /// It also protects the budget in a way a timeout cannot. Thinking is
+  /// billed as completion tokens and a runaway trace can crowd the answer out
+  /// of the context entirely — which is how the mini returned four foods out of
+  /// six after a minute of deliberation.
+  static const Map<String, dynamic> _noReasoning = {'enabled': false};
 
   static const String endpoint =
       'https://openrouter.ai/api/v1/chat/completions';
@@ -338,8 +439,12 @@ class OpenRouterClient {
     }
 
     Object? lastError;
+    final deadline = clock.now().add(_chainTimeout);
 
     for (final model in _models) {
+      final left = deadline.difference(clock.now());
+      if (left < _shortestWorthwhileAttempt) break;
+
       try {
         final json = await _callOnce(
           key: key,
@@ -348,6 +453,7 @@ class OpenRouterClient {
           user: user,
           schema: schema,
           purpose: purpose,
+          timeout: left < _timeout ? left : _timeout,
         );
         return json;
       } on AiUnreadable catch (e) {
@@ -361,8 +467,29 @@ class OpenRouterClient {
       }
     }
 
-    throw AiUnreachable('No model answered. Last error: $lastError');
+    throw AiUnreachable(_unreachableMessage(lastError));
   }
+
+  /// A sentence the sheet can show, from whatever the chain died of.
+  ///
+  /// The message was `'No model answered. Last error: $lastError'` until T42,
+  /// and every sheet in the app prints `AiFailure.message` verbatim — so a
+  /// meal that could not be read showed the user
+  /// `TimeoutException after 0:00:45.000000: Future not completed`. The two
+  /// failures worth telling apart are *slow* and *refused*: one is worth
+  /// trying again in a minute and the other is not.
+  static String _unreachableMessage(Object? lastError) => switch (lastError) {
+        TimeoutException() =>
+          'The models did not answer in time. They are free and shared, so '
+              'they are sometimes slow — this is worth trying again.',
+        DioException(type: DioExceptionType.connectionError) ||
+        DioException(type: DioExceptionType.connectionTimeout) =>
+          'OpenRouter could not be reached. Check the connection.',
+        DioException(response: final Response<dynamic> r?) =>
+          'OpenRouter refused every model (HTTP ${r.statusCode}).',
+        null => 'No model was tried.',
+        _ => 'No model answered.',
+      };
 
   /// A single request to one model. Always recorded.
   Future<Map<String, dynamic>> _callOnce({
@@ -372,6 +499,7 @@ class OpenRouterClient {
     required Object user,
     required Map<String, dynamic> schema,
     required AiPurpose purpose,
+    required Duration timeout,
   }) async {
     try {
       final response = await _dio
@@ -399,11 +527,13 @@ class OpenRouterClient {
                 'type': 'json_schema',
                 'json_schema': schema,
               },
+              'provider': _requireParameters,
+              'reasoning': _noReasoning,
               // Deterministic: this is extraction, not writing.
               'temperature': 0,
             },
           )
-          .timeout(_timeout);
+          .timeout(timeout);
 
       final status = response.statusCode ?? 0;
       if (status < 200 || status >= 300) {

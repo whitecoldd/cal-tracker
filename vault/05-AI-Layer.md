@@ -14,10 +14,63 @@ $10 purchase raises it to 1,000/day. Everything is designed assuming **50**.
 All three are vision-capable with structured JSON output:
 
 1. `nex-agi/nex-n2.5-pro:free` — 262k context
-2. `inclusionai/ling-3.0-flash-vl:free` — 262k context
+2. `nex-agi/nex-n2.5-mini:free` — 262k context
 3. `dots-studio/dots-3-note-preview:free` — 512k context
 
 Fall through on error, rate-limit, or timeout.
+
+> [!warning] The chain carried a model that could never answer
+> `inclusionai/ling-3.0-flash-vl:free` sat second here from T8 to T41. Its only
+> provider does not implement `response_format`, so every request routed to it
+> came back `HTTP 400 — model features structured outputs not support`. It
+> spent a request against the budget and fell through, every time, for four
+> releases. Nothing in the app could tell that apart from a busy afternoon.
+>
+> Before a model joins this list, `/api/v1/models/<id>/endpoints` must list
+> `response_format` among its supported parameters. `require_parameters` (below)
+> now makes the router enforce it too.
+
+### Thinking is switched off, and that is the whole of T42
+
+Every free model in the chain is a reasoning model. Left alone, each spends
+thousands of tokens deliberating before writing the JSON it was always going to
+write. Measured against one five-food line:
+
+| Model | Thinking | Time | Foods found |
+|---|---|---|---|
+| pro | on | cut off at 120 s, twice | none |
+| pro | **off** | **17 s** | all six |
+| mini | on | 60 s (8,573 thinking tokens) | four of six |
+| mini | **off** | **4 s** | all six |
+| dots-3 | on | 93 s (7,227 thinking tokens) | all six |
+| dots-3 | **off** | **11 s** | all six |
+
+So `reasoning: {enabled: false}` is the difference between the parser working
+and the parser timing out — and it costs nothing, because the reasoning-off
+answers were the *more* complete ones. Every call this app makes is
+schema-constrained extraction, not a puzzle: the schema already states what the
+answer must look like.
+
+Reasoning also threatens the answer itself. It is billed as completion tokens,
+and a runaway trace can crowd the reply out of the context — which is how the
+mini returned four foods out of six after a minute of thought.
+
+### Timeouts
+
+90 s per model, 180 s for the whole chain, and a model is skipped rather than
+started once too little of the deadline is left to be worth a request. The
+allowance is generous against a 4–17 s working call because the free tier is
+shared and genuinely congests; the same request measured at 4 s once ran past
+two minutes on a busy afternoon. Cutting a call short throws away an answer
+that was on its way **and** spends the request, since OpenRouter bills the
+attempt rather than the result.
+
+It was 45 s per model until T42, against models that were then thinking for
+60–120 s before writing anything.
+
+The timeout is wall-clock, not socket-idle: OpenRouter pads a long
+non-streaming generation with whitespace to hold the connection open, so an
+idle-based timeout never fires.
 
 ## Resolution order — AI is always last
 

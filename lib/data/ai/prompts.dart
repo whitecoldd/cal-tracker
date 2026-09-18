@@ -44,6 +44,11 @@ Task: split a line of everyday text into the foods it names.
 - Prefer generic foods over brands unless a brand is named.
 - quantity/unit should mirror how the user said it: "two eggs" is
   quantity 2, unit "piece". Only give grams when you are confident.
+- The unit must be one a person would actually use for that food. A drink is
+  "millilitres" or "cup", never "slice" or "bowl"; a spread or a syrup is
+  "teaspoon", "tablespoon" or "grams". If no unit in the list honestly fits,
+  use "grams" or "millilitres" and give the figure — a wrong unit with the
+  right weight still reads back as nonsense.
 - Put any fragment you cannot turn into a food into "unrecognised".''';
 
   /// The user's line, as the model sees it.

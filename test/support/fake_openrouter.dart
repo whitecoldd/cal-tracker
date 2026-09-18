@@ -5,11 +5,23 @@ import 'package:dio/dio.dart';
 
 /// One canned reply from the fake.
 class FakeReply {
-  const FakeReply.ok(this.body) : status = 200;
-  const FakeReply.status(this.status) : body = '{}';
+  const FakeReply.ok(this.body, {this.delay = Duration.zero}) : status = 200;
+  const FakeReply.status(this.status, {this.delay = Duration.zero})
+      : body = '{}';
+
+  /// A reply that takes longer than the client is willing to wait.
+  ///
+  /// The only way to exercise the chain deadline, which is the thing that
+  /// stands between a slow free model and a four-minute spinner.
+  const FakeReply.slow(this.delay)
+      : status = 200,
+        body = '{}';
 
   final int status;
   final String body;
+
+  /// How long the "network" takes before answering.
+  final Duration delay;
 }
 
 /// Stands in for the network, for every test that touches OpenRouter.
@@ -76,6 +88,7 @@ class FakeOpenRouterAdapter implements HttpClientAdapter {
     }
 
     final reply = replies[requests.length - 1];
+    if (reply.delay > Duration.zero) await Future<void>.delayed(reply.delay);
     return ResponseBody.fromString(
       reply.body,
       reply.status,

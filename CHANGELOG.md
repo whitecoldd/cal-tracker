@@ -23,6 +23,60 @@ its line to it.
 
 ---
 
+## 1.1.1+10 — The Reckoning Remade
+
+- **T42: the meal parser had never worked.** Describing a meal in words failed
+  almost every time, and the flow was wrong in three separate places.
+
+### The model chain carried a model that could not answer
+
+`inclusionai/ling-3.0-flash-vl:free` sat second in the chain from the first AI
+release. Its only provider does not implement structured outputs, so every
+request routed to it returned `HTTP 400 — model features structured outputs not
+support`. It spent a request against the daily budget and fell through, every
+time, for four releases. It is replaced by `nex-agi/nex-n2.5-mini:free`.
+
+`provider: {require_parameters: true}` now asks OpenRouter's router to skip any
+provider that cannot hold the schema, so the same mistake cannot repeat quietly.
+
+### The models were thinking instead of answering
+
+Every free model in the chain reasons by default, and each one spent thousands
+of tokens deliberating before writing JSON that the schema had already
+described. On one five-food line:
+
+| Model | Thinking | Time | Foods found |
+|---|---|---|---|
+| pro | on | cut off at 120 s, twice | none |
+| pro | **off** | **17 s** | all six |
+| mini | on | 60 s | four of six |
+| mini | **off** | **4 s** | all six |
+| dots-3 | on | 93 s | all six |
+| dots-3 | **off** | **11 s** | all six |
+
+`reasoning: {enabled: false}` is now sent on every call. It is the difference
+between the feature working and the feature timing out, and it costs nothing —
+the reasoning-off answers were the more complete ones.
+
+### The timeout was shorter than the models
+
+45 seconds per model, against models that were taking 60 to 120. Now 90 seconds
+per model and 180 for the whole chain, with a model skipped rather than started
+when too little of the deadline is left. A short timeout throws away an answer
+that was on its way **and** spends the request, because OpenRouter bills the
+attempt rather than the result.
+
+### Smaller things the same investigation turned up
+
+- A failed reading now says something a person can act on. It used to print the
+  raw exception: `TimeoutException after 0:00:45.000000: Future not completed`.
+- The parser is told to pick a unit that suits the food. It was answering "a
+  large coke" with *one slice* and a black coffee with *one bowl* — right
+  weight, nonsense in the journal.
+- A gram figure too small to be the portion it claims is ignored in favour of
+  the unit table. A live call returned a chicken shawarma wrap weighing one
+  gram, which logs as four kilocalories and looks like a real entry.
+
 ## 1.1.0+9 — The Reckoning Remade
 
 **The first MINOR release.** Week's End is a weekly report now, not a page of

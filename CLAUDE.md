@@ -174,8 +174,32 @@ after a one-time $10 purchase). Design every feature assuming 50.
 
 Model chain, in order, all vision + structured-output capable:
 1. `nex-agi/nex-n2.5-pro:free` (262k ctx)
-2. `inclusionai/ling-3.0-flash-vl:free`
-3. `dots-studio/dots-3-note-preview:free`
+2. `nex-agi/nex-n2.5-mini:free` (262k ctx)
+3. `dots-studio/dots-3-note-preview:free` (512k ctx)
+
+**Two fields in the request body are load-bearing. Do not drop either.**
+
+- `reasoning: {enabled: false}` — every free model here reasons by default,
+  and on one five-food line the pro was cut off twice at two minutes with
+  thinking on and answered in **17 s** with it off; the mini spent 8,573
+  thinking tokens and then returned four foods out of six. Nothing this app
+  asks is a problem to be solved — the schema states the shape of the answer —
+  so the deliberation buys nothing and costs the entire latency budget. This
+  was the whole of the T42 bug: the parser had never worked on a real phone.
+- `provider: {require_parameters: true}` — OpenRouter routes a model to
+  whichever provider is serving it, and a provider that does not implement
+  `response_format` rejects the request rather than ignoring the field. This
+  makes the router skip such a provider instead. `ling-3.0-flash-vl:free` sat
+  second in this chain for four releases and **could never have answered**:
+  its only provider does not support structured outputs, so every call was an
+  HTTP 400 that still spent a request. Before adding a model, check
+  `/api/v1/models/<id>/endpoints` lists `response_format`.
+
+Timeouts are 90 s per model and 180 s for the chain, and both are deliberate.
+A working call takes 4–17 s; the allowance is for congestion, which is real on
+a shared free tier. A timeout shorter than the congestion throws away an answer
+that was on its way *and* spends the request, because OpenRouter bills the
+attempt rather than the result.
 
 Food resolution order — **AI is always last**:
 1. User's own food library (anything resolved before, forever)

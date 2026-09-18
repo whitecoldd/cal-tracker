@@ -218,7 +218,11 @@ void main() {
       await tester.tap(find.text('PHOTOGRAPH'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('No model answered'), findsOne);
+      // A 500 from every model, so the sheet names the refusal rather than the
+      // slowness. The wording changed in T42: it used to be the raw last
+      // exception, which reached the kitchen as `TimeoutException after
+      // 0:00:45.000000`.
+      expect(find.textContaining('refused every model'), findsOne);
       // The form is untouched, and the offer to try again is still there.
       expect(find.textContaining('Check it against'), findsNothing);
       expect(find.text('PHOTOGRAPH'), findsOne);
